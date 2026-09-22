@@ -1,0 +1,573 @@
+# FeatureMap.yaml — Feature-Register (verwaltet von DevConsole)
+# Status: idee | geplant | in-arbeit | umgesetzt | abgeloest
+- id: 0922-1744-github-actions-testlauf-fur-mark
+  name: GitHub-Actions-Testlauf für Marktdaten
+  status: umgesetzt
+  beschreibung: '**Kleiner Versuch mit GitHub Actions:** Drei Märkte je Plattform im Fünf-Minuten-Takt
+    ergeben 288 Läufe am Tag und je Lauf zwei Sammelabfragen — das bleibt klar unter den Abrufgrenzen,
+    kostet aber rund 1.200 GitHub-Actions-Minuten im Monat und sprengt damit das kostenlose
+    Kontingent privater Repositories (2.000 Minuten, aber jeder Lauf zählt aufgerundet als
+    volle Minute). Setze das Repository deshalb auf öffentlich, denn dort sind die Läufe unbegrenzt
+    frei, und rechne damit, dass GitHub den Zeitplan bei Last um einige Minuten verschiebt:
+    Der Takt ist ungefähr fünf Minuten, nicht exakt.<!--color:navy-->
+
+
+    * **Sechs feste Märkte, einmal von Hand gewählt:** Drei liquide Kalshi-Kontrakte und drei
+    liquide Polymarket-Märkte aus den Wirtschaftsgruppen, die die Marktauswahl nennt — etwa
+    Leitzins, Verbraucherpreisindex und Arbeitslosenquote. Die Kennungen liegen als kleine
+    Konfigurationsdatei im Repository, damit der Versuch ohne Auswahl-Logik auskommt.<!--color:navy-->
+
+    * **Ein Lauf, eine Datei:** Je Lauf entsteht eine JSON-Datei mit Zeitstempel, Plattform,
+    Marktkennung, Preis, Orderbuchtiefe und Umsatz — schon in Dollar umgerechnet nach Schritt
+    1 der Liquiditätsharmonisierung. So sind die Testdaten später ohne Nacharbeit verwendbar.<!--color:navy-->
+
+    * **Commits zusammenfassen:** 288 Commits am Tag sind unhandlich und lösen bei Deploy
+    Now ebenso viele Bauvorgänge aus. Schreibe die Stände in eine Tagesdatei und lasse den
+    Job nur einmal pro Stunde committen, oder trenne das Datenrepository vom Auslieferungsrepository.<!--color:navy-->
+
+    * **Woran der Versuch scheitern darf:** Ziel ist die Erkenntnis, ob Zeitplan, Abruf und
+    Rückschreiben eine Woche lang ohne Eingriff laufen. Fehlgeschlagene Läufe, Lücken im Takt
+    und Statuscode 429 gehören protokolliert, nicht verhindert.<!--color:navy-->
+
+
+    Nach einer Woche steht die Entscheidung an: Trägt der Weg, wird der Takt auf eine Stunde
+    gesenkt und die Marktauswahl regelbasiert — hält er nicht, wandern die Snapshots in eine
+    gehostete Datenbank wie Supabase.<!--color:navy-->
+
+
+    <br />
+
+
+
+    Write me the Github Actions Script for this and drope me an ActionsReadme.md in the repo
+    as well'
+  tests:
+  - backend/tests/test_probe_collect.py
+  - backend/tests/test_probe_merge.py
+  - backend/tests/test_probe_workflows.py
+- id: 0922-1737-durchgaengiges-logging-fuer-fron
+  name: Durchgaengiges Logging fuer Frontend und Backend
+  status: geplant
+  beschreibung: 'Die Anwendung erhaelt ein einheitliches, nachvollziehbares Logging. Heute
+    existiert lediglich ein einzelner Logger in backend/app/clients/base.py.
+
+    Backend: zentrale Logging-Konfiguration mit Ausgabe in eine Logdatei und auf die Konsole,
+    einheitliches Format mit Zeitstempel und Stufe. Protokolliert werden Start und Stopp der
+    Anwendung, jeder API-Aufruf mit Pfad, Methode, Statuscode und Dauer, jeder Abruf der Marktdatenquellen
+    inklusive Trefferzahl und Fehlern, Treffer und Verfehlen des Markt-Caches sowie jede schreibende
+    Aenderung an Index-Regeln (Anlegen, Aendern, Loeschen).
+
+    Frontend: ein Logger, der Index-Wechsel, Parameter-Aenderungen, Speichern, Verwerfen,
+    Loeschen, Anlegen, Aktualisieren, Filter- und Sortierwechsel sowie aufgetretene Fehler
+    erfasst. Die Eintraege werden gebuendelt an einen neuen Endpunkt POST /logs gesendet und
+    dort in dieselbe Logdatei geschrieben, damit alles an einer Stelle zusammenlaeuft. Das
+    Senden darf die Bedienung nicht blockieren; faellt der Endpunkt aus, arbeitet die Oberflaeche
+    normal weiter.
+
+    Keine personenbezogenen Daten und keine Zugangsdaten im Log.'
+  kriterien:
+  - Eine zentrale Logging-Konfiguration schreibt in eine Logdatei und auf die Konsole, mit
+    Zeitstempel und Stufe je Zeile
+  - Start und Stopp der Anwendung erzeugen je einen Logeintrag
+  - Jeder API-Aufruf wird mit Methode, Pfad, Statuscode und Dauer protokolliert
+  - Abrufe bei Polymarket und Kalshi werden mit Trefferzahl protokolliert, Fehler mit Stufe
+    Warnung oder Fehler
+  - Treffer und Verfehlen des Markt-Caches sind im Log unterscheidbar
+  - Anlegen, Aendern und Loeschen einer Index-Regel erzeugen je einen Eintrag mit dem betroffenen
+    Namen
+  - Der Endpunkt POST /logs nimmt gebuendelte Frontend-Eintraege entgegen und schreibt sie
+    in dieselbe Logdatei
+  - Das Frontend protokolliert Index-Wechsel, Parameter-Aenderungen, Speichern, Verwerfen,
+    Loeschen, Anlegen, Aktualisieren, Filter- und Sortierwechsel sowie Fehler
+  - Ein Ausfall des Log-Endpunkts beeintraechtigt keine Funktion der Oberflaeche
+  - Logs enthalten keine Zugangsdaten und keine personenbezogenen Daten
+  tests:
+  - 'Backend-Test: Ein Aufruf von GET /indices erzeugt einen Logeintrag mit Methode, Pfad
+    und Statuscode'
+  - 'Backend-Test: POST /logs mit einer Liste von Eintraegen antwortet mit Erfolg und schreibt
+    jeden Eintrag ins Log'
+  - 'Backend-Test: POST /logs mit fehlerhaftem Rumpf wird mit Statuscode 422 abgewiesen'
+  - 'Backend-Test: Ein Fehler beim Abruf einer Marktquelle erzeugt einen Eintrag der Stufe
+    Warnung, ohne den Abruf des Index abzubrechen'
+  - 'Backend-Test: Zwei aufeinanderfolgende Abrufe erzeugen einen Cache-Verfehlt- und einen
+    Cache-Treffer-Eintrag'
+  - 'Backend-Test: PUT und DELETE auf eine Index-Regel erzeugen je einen Eintrag mit dem Regelnamen'
+  - 'Frontend-Test: Ein Index-Wechsel erzeugt einen Logeintrag im Puffer'
+  - 'Frontend-Test: Gepufferte Eintraege werden gebuendelt an POST /logs gesendet'
+  - 'Frontend-Test: Schlaegt POST /logs fehl, bleibt die Oberflaeche bedienbar und es erscheint
+    keine Fehlermeldung fuer den Nutzer'
+  gruppe: grp-0922-1736-d126
+  rang: 5
+- id: 0922-1737-visualisierungen-und-oberflaeche
+  name: Visualisierungen und Oberflaechen-Politur
+  status: geplant
+  beschreibung: 'Die Oberflaeche ueber den Funktionsumfang des Alt-Frontends hinaus aufwerten,
+    ausschliesslich mit den on-demand verfuegbaren Daten. Ein Zeitverlauf ist bewusst nicht
+    Teil dieses Tickets, da die Anwendung keine historischen Snapshots speichert; das waere
+    ein eigenes Historisierungs-Vorhaben samt PostgreSQL.
+
+    Umfang: Indexwert als grosse Kennzahl mit Gauge zur Einordnung zwischen 0 und 100 Prozent.
+    Histogramm der Preisverteilung der enthaltenen Maerkte, das zeigt, ob der Index von Konsens
+    oder Uneinigkeit getragen wird. Balkendarstellung der nach Gewicht fuehrenden Maerkte,
+    damit sichtbar wird, welche wenigen Maerkte den Wert dominieren. Filter-Funnel als visuelle
+    Trichterdarstellung statt Textzeile.
+
+    Dazu Skeleton-Ladezustaende statt reiner Statuszeile, Fehler als Hinweis-Einblendung,
+    Dark Mode und sauberes Verhalten auf schmalen Fenstern. Diagramme mit Recharts, einheitliche
+    Farbpalette, ausreichende Kontraste in hellem und dunklem Modus.'
+  kriterien:
+  - Der Indexwert wird als Kennzahl mit Gauge dargestellt und ist bei fehlendem Wert als solcher
+    gekennzeichnet
+  - Ein Histogramm zeigt die Preisverteilung der im Index enthaltenen Maerkte
+  - Eine Balkendarstellung zeigt die nach Gewicht fuehrenden Maerkte des aktuellen Index
+  - Der Filter-Funnel ist als Trichter dargestellt und nennt weiterhin alle sechs Stufen mit
+    ihren Zahlen
+  - Waehrend eines Abrufs erscheinen Skeleton-Platzhalter; Fehler werden als Einblendung gezeigt
+  - Dark Mode funktioniert; alle Diagramme und Texte sind in beiden Modi ausreichend kontrastreich
+  - Das Layout bleibt auf schmalen Fenstern ohne waagerechtes Scrollen nutzbar
+  - Alle Funktionen aus Ticket 2 und 3 sind unveraendert vorhanden
+  tests:
+  - Der Gauge rendert bei value 0.4237 die Beschriftung 42,4 % und bei value null einen Leerzustand
+  - Das Histogramm bildet eine gemockte Marktliste auf die erwartete Anzahl Balken ab
+  - Die Balkendarstellung zeigt bei liquiditaetsgewichteter Methode die Maerkte in absteigender
+    Gewichtsreihenfolge
+  - Bei einem Index ohne Maerkte rendern Gauge, Histogramm und Balken einen Leerzustand statt
+    eines Fehlers
+  - Waehrend eines laufenden Abrufs sind Skeleton-Platzhalter im Dokument, danach nicht mehr
+  - Ein fehlgeschlagener Abruf erzeugt eine sichtbare Fehlermeldung und keinen leeren Bildschirm
+  - Der Trichter enthaelt alle sechs Stufenbezeichnungen mit den Zahlen der gemockten Antwort
+  - Umschalten auf Dark Mode aendert das Farbschema, ohne dass Inhalte verschwinden
+  gruppe: grp-0922-1736-d126
+  rang: 4
+- id: 0922-1737-parameter-panel-in-react-portier
+  name: Parameter-Panel in React portieren und Alt-Frontend abloesen
+  status: geplant
+  beschreibung: 'Die Funktionalitaet aus params.js vollstaendig nach React uebertragen und
+    danach das Vanilla-Frontend entfernen.
+
+    Umfang: Keyword-Verwaltung als Chips mit Hinzufuegen per Enter, Komma und Verlassen des
+    Feldes, Duplikatschutz ohne Beachtung der Gross- und Kleinschreibung sowie Entfernen ueber
+    das x. Tag-Liste mit Suchfeld, Anzahl je Tag, Begrenzung auf 150 Zeilen mit Hinweis auf
+    die Restmenge und Vorsortierung der ausgewaehlten Tags. Bereits gespeicherte Tags bleiben
+    auch dann sichtbar und abwaehlbar, wenn aktuell keine Quelle sie liefert. Felder fuer
+    Mindestliquiditaet und Preis-Korridor.
+
+    Live-Vorschau ueber POST /indices/{name}/preview mit 250 ms Verzoegerung, ohne die Datenbank
+    zu beruehren. Dirty-State mit Badge, aktiv geschalteten Schaltflaechen fuer Speichern
+    und Verwerfen. Speichern ueber PUT, Verwerfen setzt auf den gespeicherten Stand zurueck,
+    Loeschen ueber DELETE mit zweistufiger Bestaetigung.
+
+    Neuen Index anlegen ueber POST /indices mit den aktuellen Panel-Werten beziehungsweise
+    Standardwerten, inklusive Fehlermeldung bei bereits vergebenem Namen.
+
+    Besonderes Augenmerk auf das heute ueber ein cancelable CustomEvent geloeste Verhalten:
+    Bei ungespeicherten Aenderungen berechnet der Aktualisieren-Button eine Vorschau statt
+    den gespeicherten Index neu zu laden.
+
+    Erst wenn alle Punkte dieses und des vorigen Tickets nachweislich erfuellt sind: / liefert
+    die React-App aus, backend/app/static/index.html, params.js und style.css werden entfernt.'
+  kriterien:
+  - Keywords lassen sich per Enter, Komma und Feldverlassen hinzufuegen und per x entfernen;
+    Duplikate werden unabhaengig von Gross- und Kleinschreibung abgewiesen
+  - Die Tag-Liste zeigt Suchfeld, Anzahl je Tag, maximal 150 Zeilen mit Restmengen-Hinweis;
+    ausgewaehlte Tags stehen oben
+  - Ein gespeicherter Tag, den keine Quelle mehr liefert, bleibt sichtbar und abwaehlbar
+  - Aenderungen loesen nach 250 ms eine Vorschau aus; die gespeicherte Regel bleibt dabei
+    unveraendert
+  - Bei Abweichung vom gespeicherten Stand erscheint das Badge und Speichern sowie Verwerfen
+    sind aktiv, sonst inaktiv
+  - Speichern uebernimmt die Regel dauerhaft; Verwerfen stellt den gespeicherten Stand wieder
+    her
+  - Loeschen erfordert eine ausdrueckliche Bestaetigung und waehlt danach den ersten verbleibenden
+    Index
+  - Ein neuer Index laesst sich anlegen; ein bereits vergebener Name erzeugt eine sichtbare
+    Fehlermeldung
+  - Bei ungespeicherten Aenderungen erzeugt der Aktualisieren-Button eine Vorschau statt eines
+    Neuladens
+  - Die Route / liefert die React-App aus; index.html, params.js und style.css sind entfernt
+    und keine Funktion der Inventur fehlt
+  tests:
+  - Enter, Komma und Feldverlassen erzeugen je ein Keyword-Chip; ein Duplikat in abweichender
+    Schreibweise wird nicht hinzugefuegt
+  - Ein Klick auf das x eines Chips entfernt genau dieses Keyword
+  - Bei mehr als 150 Tags werden 150 Zeilen und ein Hinweis auf die Restmenge gerendert
+  - Ein in der Regel gespeicherter Tag, der nicht in der Antwort von GET /tags steht, erscheint
+    mit Anzahl Strich und laesst sich abwaehlen
+  - Nach einer Aenderung wird POST preview genau einmal aufgerufen, und zwar erst nach Ablauf
+    der Verzoegerung
+  - Mehrere Aenderungen in schneller Folge loesen nur einen Vorschau-Aufruf mit dem letzten
+    Stand aus
+  - Ohne Abweichung sind Speichern und Verwerfen inaktiv und das Badge unsichtbar; nach einer
+    Aenderung ist es umgekehrt
+  - Speichern sendet PUT mit der Entwurfsregel; danach ist der Dirty-State zurueckgesetzt
+  - Verwerfen stellt die gespeicherten Werte in allen Feldern wieder her
+  - Loeschen zeigt erst die Rueckfrage; Nein bricht ab ohne DELETE, Ja sendet DELETE
+  - Anlegen mit vergebenem Namen zeigt die Fehlermeldung aus dem Antwortfeld detail
+  - Aktualisieren bei ungespeicherten Aenderungen ruft preview auf und nicht GET /indices/{name}
+  - 'Backend-Test: GET / liefert die React-App aus'
+  - Alle Kriterien der Funktions-Inventur aus Ticket 2 und 3 werden abschliessend gegen das
+    Alt-Verhalten geprueft
+  gruppe: grp-0922-1736-d126
+  rang: 3
+- id: 0922-1737-dashboard-und-marktliste-in-reac
+  name: Dashboard und Marktliste in React portieren
+  status: geplant
+  beschreibung: 'Die Kernansicht aus index.html nach React uebertragen: Index-Auswahl, Kennzahlen,
+    Filter-Funnel und Markttabelle. Funktional identisch zum Bestand, nur die Technik wechselt.
+
+    Umfang im Einzelnen: Index-Buttons aus GET /indices mit aktivem Zustand; Abruf eines Index
+    ueber GET /indices/{name} inklusive Hard-Refresh ueber ?refresh=1; Kennzahlenzeile mit
+    Indexwert in Prozent, Methode in deutscher Beschriftung (liquiditaetsgewichtet, einfacher
+    Durchschnitt, keine Daten), Marktanzahl, Liquiditaet, Volumen und Stand; Filter-Funnel
+    mit allen sechs Stufen (Geladen, nach Tags, nach Keywords, nach Liquiditaet, nach Preis-Korridor,
+    nach Enddatum).
+
+    Markttabelle mit Textfilter ueber Titel und Tags, Quellen-Auswahlfeld, Sortierung aller
+    sechs Spalten mit Pfeilumschaltung und absteigend/aufsteigend, Markt-Links in neuem Tab
+    mit rel="noopener noreferrer", Hinweis wenn kein Markt dem Filter entspricht.
+
+    Deutsche Zahlen- und Datumsformatierung ueber Intl bleibt erhalten, ebenso die Nutzung
+    der vollen Bildschirmbreite. Durch TanStack Query entfaellt die bestehende Race-Condition,
+    bei der eine aeltere Antwort eine neuere ueberschreiben kann.'
+  kriterien:
+  - Alle Indizes werden als Buttons dargestellt; der gewaehlte Index ist visuell hervorgehoben
+  - Die Kennzahlenzeile zeigt Wert, Methode, Marktanzahl, Liquiditaet, Volumen und Stand mit
+    denselben Werten wie das Alt-Frontend
+  - Der Filter-Funnel zeigt alle sechs Stufen mit den Zahlen aus dem API-Feld funnel
+  - Die Markttabelle ist nach jeder der sechs Spalten sortierbar; erneuter Klick dreht die
+    Richtung um
+  - Textfilter durchsucht Titel und Tags; das Quellenfeld enthaelt die tatsaechlich gelieferten
+    Quellen
+  - Maerkte mit url werden als Link in neuem Tab geoeffnet, Maerkte ohne url als reiner Text
+  - Der Aktualisieren-Button ruft den Index mit refresh=1 ab
+  - Zahlen und Datum erscheinen in deutscher Formatierung; das Layout nutzt die volle Bildschirmbreite
+  - Schnelles Wechseln zwischen Indizes zeigt immer das Ergebnis der zuletzt angeforderten
+    Auswahl
+  tests:
+  - Die Indexliste wird aus einer gemockten Antwort gerendert; ein Klick markiert den Button
+    als aktiv
+  - Die Kennzahlenzeile formatiert value 0.4237 als 42,4 % und method liquidity_weighted als
+    liquiditaetsgewichtet
+  - Ein fehlender Wert (value null, method no_data) wird als Strich beziehungsweise "keine
+    Daten" dargestellt
+  - Der Funnel rendert alle sechs Stufen mit den Zahlen der gemockten Antwort
+  - Sortierung nach liquidity ordnet absteigend, ein zweiter Klick aufsteigend; Maerkte ohne
+    Wert stehen am Ende
+  - Der Textfilter reduziert die Tabelle auf Maerkte, deren Titel oder Tags den Suchbegriff
+    enthalten
+  - Der Quellenfilter zeigt nur Maerkte der gewaehlten Quelle
+  - Bei leerem Filterergebnis erscheint der Hinweis statt einer leeren Tabelle
+  - Ein Markt mit url rendert ein a-Element mit target _blank und rel noopener noreferrer
+  - Zwei schnell aufeinanderfolgende Abrufe zeigen am Ende die Daten des zuletzt gewaehlten
+    Index
+  gruppe: grp-0922-1736-d126
+  rang: 2
+- id: 0922-1737-react-typescript-toolchain-aufse
+  name: React/TypeScript-Toolchain aufsetzen und in FastAPI-Auslieferung einbinden
+  status: geplant
+  beschreibung: 'Grundlage fuer die Ablosung des Vanilla-JS-Frontends schaffen. Vite + React
+    + TypeScript im Verzeichnis frontend/ aufsetzen, inklusive Vitest und React Testing Library.
+
+    Der Produktions-Build wird nach backend/app/static/dist/ geschrieben und von FastAPI unter
+    der Route /app ausgeliefert. Das bestehende Frontend bleibt in diesem Paket unangetastet
+    auf / erreichbar, damit keine Funktionalitaet verloren geht.
+
+    Fuer die Entwicklung wird der Vite-Dev-Server mit Proxy auf http://localhost:8000 konfiguriert
+    (Hot Reload), start_dev.sh startet Backend und Vite gemeinsam. start.sh bleibt unveraendert
+    und laeuft weiter auf einem Port.
+
+    TypeScript-Typen fuer die API-Antworten (IndexRule, Marktdaten, Funnel, Tags) werden aus
+    backend/app/schemas.py abgeleitet und zentral in frontend/src/api/types.ts gepflegt. Ein
+    duenner API-Client kapselt alle Endpunkte. TanStack Query wird eingebunden. Alle Dateien
+    bleiben unter 500 Zeilen.
+
+    Projekt.md wird auf den tatsaechlichen Stand gebracht (Frontend React/TypeScript, Datenhaltung
+    SQLite als Default mit optionalem PostgreSQL). Requirements.log wird angelegt, Changelog.md
+    fortgeschrieben.'
+  kriterien:
+  - frontend/ enthaelt ein lauffaehiges Vite-Projekt mit React und TypeScript; npm run build
+    laeuft fehlerfrei durch
+  - Der Build-Output landet in backend/app/static/dist/ und wird von FastAPI unter /app ausgeliefert
+  - Die Route / liefert unveraendert das bestehende Vanilla-Frontend aus; keine bestehende
+    Funktion ist beeintraechtigt
+  - start_dev.sh startet Backend und Vite-Dev-Server; Anfragen an /indices, /tags und /static
+    werden korrekt auf Port 8000 weitergeleitet
+  - frontend/src/api/types.ts bildet alle Felder der Pydantic-Schemas ab; der API-Client deckt
+    alle sieben Endpunkte ab
+  - TanStack Query ist eingebunden und im Wurzel-Provider konfiguriert
+  - Vitest laeuft ueber npm test und fuehrt mindestens einen gruenen Test aus
+  - Keine Datei in frontend/src ueberschreitet 500 Zeilen
+  - Projekt.md nennt React/TypeScript und SQLite/PostgreSQL korrekt
+  - Requirements.log existiert mit einem Eintrag zu dieser Umstellung; Changelog.md ist ergaenzt
+  tests:
+  - 'Backend-Test: GET /app liefert HTTP 200 und HTML aus dem dist-Verzeichnis'
+  - 'Backend-Test: GET / liefert weiterhin das bestehende index.html mit HTTP 200'
+  - 'Backend-Test: Alle bestehenden pytest-Tests laufen unveraendert gruen durch'
+  - 'Frontend-Test: Der API-Client ruft GET /indices mit gemocktem fetch auf und liefert typisierte
+    Daten zurueck'
+  - 'Frontend-Test: Die App-Wurzelkomponente rendert ohne Fehler innerhalb des Query-Providers'
+  - 'Manuell: npm run build erzeugt dist/, danach ist /app im Browser erreichbar'
+  gruppe: grp-0922-1736-d126
+  rang: 1
+- id: 0922-1725-economic-uncertainty-index-aus-p
+  name: Economic Uncertainty Index aus Prognosemärkten
+  status: umgesetzt
+  beschreibung: "Baue mir diesen Index: \n\n**Auftrag:** Baue einen täglich berechneten Economic
+    Uncertainty Index aus den Prognosemärkten (Märkte, auf denen Menschen auf den Ausgang
+    künftiger Ereignisse wetten und deren Preis die erwartete Wahrscheinlichkeit anzeigt)
+    von Polymarket und Kalshi. Der Index misst, wie uneinig sich der Markt über wirtschaftlich
+    relevante Ereignisse ist — nicht, wie wahrscheinlich ein einzelnes Ereignis ist.<!--color:navy-->\n\n**1.
+    Daten abrufen.** Hole alle aktiven Märkte beider Plattformen in einem einzigen Durchlauf
+    zum selben Zeitpunkt. Werte aus verschiedenen Stunden sind nicht vergleichbar, weil sich
+    Liquidität (die Handelbarkeit eines Marktes) innerhalb von Stunden verändert. Nutze die
+    offenen Schnittstellen beider Anbieter und halte deren Abrufgrenzen ein.<!--color:navy-->\n\n**2.
+    Einheiten in Dollar überführen.** Polymarket rechnet in USDC (ein Dollar-Stablecoin, also
+    eine Kryptowährung mit festem Dollarwert), Kalshi in Cent und in Kontrakten. Teile Kalshi-Cent
+    durch 100. Rechne Kalshi-Kontrakte mit dem aktuellen Preis in Dollar um, da ein Kontrakt
+    bei Eintritt 1 USD auszahlt. Offene Positionen (`open_interest`) liefert nur Kalshi und
+    bleiben deshalb außen vor.<!--color:navy-->\n\n**3. Märkte filtern.** Nimm nur Märkte
+    mit einem Preis zwischen 0,03 und 0,97, einem Enddatum in der Zukunft und dem Status aktiv.
+    Das kumulierte Gesamtvolumen seit Marktstart ist kein Kriterium, weil es alte Märkte belohnt,
+    in denen heute niemand mehr handelt. Vergleichseinheit ist die einzelne Ja-Nein-Frage,
+    nicht das übergeordnete Ereignis.<!--color:navy-->\n\n**4. Liquiditäts-Score je Markt
+    berechnen.** Kombiniere die Orderbuchtiefe (den Dollarwert aller offenen Kauf- und Verkaufsaufträge)
+    mit dem Umsatz der letzten 24 Stunden, beide in Dollar. Ein Spread (der Abstand zwischen
+    höchstem Kaufgebot und niedrigstem Verkaufsangebot) über fünf Cent drückt den Score, weil
+    der Preis dann kaum aussagekräftig ist.<!--color:navy-->\n\n**5. Doppelte Fragen zusammenführen.**
+    Bieten beide Plattformen dieselbe Frage an, verschmilz sie zu einem Bestandteil: Liquidität
+    und Umsatz addieren, den Preis nach Liquidität gewichtet mitteln. Die Zuordnung läuft
+    über Enddatum, Thema und Schlüsselwörter im Titel; bei Zweifel bleiben die Märkte getrennt.<!--color:navy-->\n\n**6.
+    Unsicherheitsbeitrag je Markt bestimmen.** Bei Märkten ohne gute oder schlechte Seite,
+    etwa einer Zinsentscheidung, gilt die Formel 1 − 2 × |Preis − 0,50|: Sie ergibt 1 bei
+    völliger Uneinigkeit und 0 bei Konsens. Bei gerichteten Märkten mit klarer schlechter
+    Seite, etwa „Arbeitslosenquote steigt über 5 Prozent\", zählt der Preis selbst, so gepolt,
+    dass 1 hohe Unsicherheit bedeutet. Die Polung (die einmal festgelegte Richtung eines Marktes)
+    wird je Markt gespeichert und nie neu entschieden.<!--color:navy-->\n\n**7. Gewichten
+    und normieren.** Das Gewicht folgt der Wurzel des Liquiditäts-Scores, gekappt bei 10 Prozent
+    je Markt, damit kein Großmarkt den Index dominiert. Normiere das Ergebnis auf eine Skala
+    von 0 bis 100. Die Zusammensetzung ändert sich nur monatlich zu einem festen Termin, sonst
+    stammen Sprünge im Indexwert aus der Auswahl statt aus veränderten Erwartungen.<!--color:navy-->\n\n**8.
+    Zuordnung durch das Sprachmodell, Bestätigung durch einen Menschen.** Das Modell ordnet
+    jeden Markt dem Thema Wirtschaft zu und schlägt die Polung vor. Beide Entscheidungen landen
+    als Datensatz in der Datenbank und werden beim nächsten Abruf wiederverwendet.<!--color:navy-->\n\n**9.
+    Ab dem ersten Tag speichern.** Lege jeden Tag einen vollständigen Marktstand in PostgreSQL
+    ab. Weder Polymarket noch Kalshi liefern eine brauchbare Preishistorie für abgelaufene
+    Märkte, und ohne eigene Snapshots gibt es in sechs Monaten keinen Backtest (das Nachrechnen
+    des Index auf vergangenen Daten).<!--color:navy-->\n\n**10. Reihenfolge der Umsetzung.**
+    Beginne mit dem Sammeln, nicht mit der Logik: erst Abruf, Harmonisierung, Filter, Score
+    und täglicher Snapshot; dann der Regelsatz als Datensatz statt als Code; dann Zuordnung
+    und Polung; dann die Berechnung; zuletzt Backtest und Oberfläche. Solange die Historie
+    zu kurz für einen Vergleich mit dem VIX (dem Volatilitätsindex des S\\&P 500) ist, ersetzt
+    ein Plausibilitätscheck den Backtest: Der Index muss an Tagen mit Zinsentscheidungen,
+    Arbeitsmarktdaten und geopolitischen Ereignissen sichtbar steigen.<!--color:navy-->\n\n**Randbedingungen:**
+    Zeige öffentlich nur den berechneten Indexwert und nenne Polymarket und Kalshi als Quelle.
+    Verteile keine Rohdaten weiter, solange keine schriftliche Freigabe vorliegt.<!--color:navy-->\n"
+  tests:
+  - backend/tests/test_eui_harmonize.py
+  - backend/tests/test_eui_dedupe.py
+  - backend/tests/test_eui_scoring.py
+  - backend/tests/test_eui_classify.py
+  - backend/tests/test_eui_pipeline.py
+  - backend/tests/test_eui_api.py
+  - backend/tests/test_eui_plausibility.py
+  - backend/tests/test_migration.py
+- id: 0919-1827-server-logging-fur-start-stop-re
+  name: Server-Logging für Start, Stop, Reload, Anfragen und Fehler
+  status: geplant
+  beschreibung: 'Analyse des „Absturzes“ vom 2026-09-19 17:23: Die App ist nicht an einem
+    Programmfehler gestorben, sondern wurde beim Start eines Ticket-Laufs von außen mit HUP/TERM
+    beendet (Exit 129). Die Ursachensuche war nur über Datei-Änderungszeiten möglich, weil
+    die App selbst nichts protokolliert. Das wird behoben.
+
+
+    Umfang:
+
+    - Zentrale Logging-Konfiguration in backend/app (Modul logging, ein Format mit Zeitstempel,
+    Level, Logger-Name, Nachricht).
+
+    - Log-Ausgabe auf stdout (für die Konsole) und zusätzlich in eine rotierende Datei logs/app.log
+    im Projekt-Root.
+
+    - Ereignisse, die geloggt werden: Anwendungsstart und -stop (Lifespan-Hooks), jede HTTP-Anfrage
+    mit Methode, Pfad, Statuscode und Dauer, jeder Cache-Neuabruf (Beginn, Ende, Anzahl Märkte
+    je Quelle, Dauer), jede fehlgeschlagene externe Anfrage (bereits vorhanden, wird in das
+    gemeinsame Format überführt), jede Index-Änderung (Anlegen, Speichern, Löschen mit Index-Name).
+
+    - Unerwartete Fehler in Endpunkten werden mit Traceback geloggt, bevor FastAPI sie als
+    500 zurückgibt.
+
+    - Empfangene Beendigungssignale (SIGTERM/SIGHUP) werden vor dem Herunterfahren mit Signalname
+    geloggt.
+
+    - Bestehende Funktionalität bleibt unverändert.'
+  kriterien:
+  - Start und Stop der App erzeugen je eine Logzeile mit Zeitstempel.
+  - Jede HTTP-Anfrage erzeugt eine Logzeile mit Methode, Pfad, Status und Dauer in Millisekunden.
+  - Jeder Cache-Neuabruf erzeugt Logzeilen für Beginn und Ende inklusive Marktanzahl je Quelle.
+  - Anlegen, Speichern und Löschen eines Index erzeugen je eine Logzeile mit Index-Name.
+  - Ein unerwarteter Fehler in einem Endpunkt landet mit Traceback im Log.
+  - Logdatei logs/app.log existiert nach dem Start und rotiert (max. 5 MB, 5 Dateien); logs/
+    steht in .gitignore.
+  - Alle Dateien unter 500 Zeilen; Changelog.md und Requirements.log aktualisiert.
+  tests:
+  - 'Test: Anfrage an GET /indices erzeugt Logeintrag mit Methode, Pfad, Status 200 und Dauer
+    (caplog).'
+  - 'Test: Cache-Neuabruf mit gefaktem Loader erzeugt Beginn- und Ende-Logeintrag mit Marktanzahl.'
+  - 'Test: POST /indices, PUT /indices/{name} und DELETE /indices/{name} erzeugen je einen
+    Logeintrag mit Index-Name.'
+  - 'Test: Ein Endpunkt, dessen Abhängigkeit eine Exception wirft, erzeugt einen Logeintrag
+    mit Traceback und liefert 500.'
+  - 'Test: Logging-Setup legt logs/app.log an und verwendet einen RotatingFileHandler.'
+  gruppe: grp-0919-1827-1c4b
+  rang: 1
+- id: 0919-1720-bildschirmbreite-voll-ausnutzen
+  name: Bildschirmbreite voll ausnutzen
+  status: umgesetzt
+  beschreibung: full width of the screen please
+  tests:
+  - backend/tests/test_dashboard.py
+  screenshot: .devconsole/features/0919-1720-bildschirmbreite-voll-ausnutzen.png
+- id: 0919-1629-index-parameter-im-frontend-anpa
+  name: Index-Parameter im Frontend anpassen, Vorschau/Speichern, Indizes anlegen und löschen
+  status: umgesetzt
+  beschreibung: 'Pro Index sollen die Parameter (Keywords, Tags/Kategorien, Mindestliquidität,
+    Preis-Korridor) direkt im Dashboard anpassbar sein. Änderungen wirken zunächst nur als
+    Vorschau (temporär ausprobieren, DB unverändert) und können auf Wunsch dauerhaft gespeichert
+    werden. Zusätzlich sollen neue Indizes angelegt und bestehende gelöscht werden können.
+
+    Beschlossener Umfang:
+
+    - Neue Endpoints: Vorschau (Regel im Request-Body, berechnet Index-Wert, Trichter und
+    Märkte ohne zu speichern), PUT /indices/{name} (Regel speichern), POST /indices (Index
+    anlegen), DELETE /indices/{name} (Index löschen). Validierung: Name eindeutig, min_liquidity
+    >= 10 000 USD, 0 <= min_price < max_price <= 1.
+
+    - Dashboard: aufklappbares Panel "Parameter" pro Index mit Keyword-Chips (hinzufügen/entfernen),
+    Tag-Mehrfachauswahl (Liste aus den tatsächlich gelieferten Tags der Grundgesamtheit),
+    Eingaben für Mindestliquidität (Hinweis: mindestens 10 000 USD) und Preis-Korridor.
+
+    - Jede Änderung im Panel löst sofort eine Vorschau aus: Kopfzeile, Trichter und Tabelle
+    aktualisieren sich; die gespeicherte Regel bleibt unverändert. Markierung "ungespeicherte
+    Änderungen".
+
+    - Knöpfe "Dauerhaft speichern" (PUT, Markierung verschwindet) und "Verwerfen" (zurück
+    zur gespeicherten Regel).
+
+    - Knopf "Neuer Index": Name plus Parameter, wird nach Anlegen ausgewählt. Knopf "Index
+    löschen" mit Rückfrage; danach wird der erste verbleibende Index ausgewählt.
+
+    - Bestehende Funktionalität (Index-Auswahl, Tabelle, Quellenfilter, Titelfilter, Aktualisieren)
+    bleibt erhalten.'
+  kriterien:
+  - Vorschau-Endpoint liefert dieselbe Antwortstruktur wie GET /indices/{name}, ohne die Regel
+    in der DB zu verändern.
+  - PUT/POST/DELETE funktionieren mit Validierung (400 bei ungültigen Werten, 404 bei unbekanntem
+    Index, 409 bei doppeltem Namen).
+  - Panel zeigt die gespeicherten Parameter, Änderungen lösen eine Vorschau aus, Markierung
+    für ungespeicherte Änderungen sichtbar.
+  - Speichern persistiert; nach Neuladen der Seite sind die Werte vorhanden. Verwerfen stellt
+    die gespeicherte Regel wieder her.
+  - Index anlegen und löschen funktionieren aus dem Dashboard; gelöschte Indizes kehren nach
+    Neustart nicht zurück.
+  - Alle Dateien unter 500 Zeilen; Changelog.md und Requirements.log aktualisiert.
+  tests:
+  - backend/tests/test_index_params.py
+  gruppe: grp-0919-1629-30c2
+  rang: 2
+- id: 0918-2056-preiskorridor-und-enddatum-in-au
+  name: Preiskorridor und Enddatum in Aufnahmeregel
+  status: umgesetzt
+  beschreibung: 'Konsequenz für den Index: Die Aufnahmeregel filtert nicht nur auf Liquidity
+    und `volume24hr`, sondern zusätzlich auf einen Preiskorridor (etwa 0.03 bis 0.97) und
+    ein Enddatum in der Zukunft. Ein Markt nahe 0 oder 1 trägt keine Information mehr, egal
+    wie hoch sein Volume ist. So fallen LeBron-Märkte heraus, ohne dass echte Politikmärkte
+    mit starkem Konsens verloren gehen.
+
+
+    <br />
+
+    '
+  tests:
+  - backend/tests/test_engine.py
+  - backend/tests/test_clients.py
+  - backend/tests/test_migration.py
+  - backend/tests/test_api.py
+- id: 0918-2019-polymarket-verknupfung-fur-alle
+  name: Polymarket-Verknüpfung für alle Märkte
+  status: umgesetzt
+  beschreibung: All these markets need to be linked to their polymarket market
+  tests:
+  - backend/tests/test_market_links.py
+  - backend/tests/test_migration.py
+  screenshot: .devconsole/features/0918-2019-polymarket-verknupfung-fur-alle.png
+- id: 0918-1919-interaktives-dashboard
+  name: Interaktives Dashboard
+  status: umgesetzt
+  beschreibung: ich brauche ein Interactives Dashboard hierzu
+  tests:
+  - backend/tests/test_dashboard.py
+- id: 0917-1122-projekt-gerust-und-datenmodell
+  name: Projekt-Gerüst und Datenmodell
+  status: umgesetzt
+  beschreibung: Legt Repo-Struktur, Backend-Skeleton und das Datenmodell für Märkte und Index-Regeln
+    an, sodass alle folgenden Pakete darauf aufbauen können.
+  kriterien:
+  - Repo-Struktur mit Backend-Ordner, .venv, requirements.txt vorhanden
+  - DB-Schema (Markets, IndexRules) via Migration erstellt
+  - Requirements.log und Changelog.md initialisiert
+  tests:
+  - backend/tests/test_migration.py
+  - backend/tests/test_models.py
+  gruppe: grp-0917-1122-53c3
+  rang: 1
+- id: 0917-1122-anbindung-polymarket-und-kalshi
+  name: Anbindung Polymarket und Kalshi
+  status: umgesetzt
+  beschreibung: Implementiert Clients, die Marktdaten (Preis, Volumen, Liquidität) von Polymarket
+    und Kalshi abrufen und in ein gemeinsames Schema normalisieren.
+  kriterien:
+  - Beide Clients liefern normalisierte Markt-Objekte mit identischen Feldern
+  - Fehlerhafte/leere API-Antworten werden abgefangen, ohne den Prozess abzubrechen
+  tests:
+  - backend/tests/test_clients.py
+  gruppe: grp-0917-1122-53c3
+  rang: 2
+- id: 0917-1122-index-regelwerk-engine
+  name: Index-Regelwerk-Engine
+  status: umgesetzt
+  beschreibung: Baut die Engine, die anhand von Kategorie/Keyword-Filtern und Liquiditätsschwelle
+    bestimmt, welche Märkte zu welchem Index gehören.
+  kriterien:
+  - Regeln sind konfigurierbar (nicht hartcodiert) und pro Index gespeichert
+  - Engine liefert für eine gegebene Regel die passende Marktliste aus normalisierten Daten
+  tests:
+  - backend/tests/test_engine.py
+  gruppe: grp-0917-1122-53c3
+  rang: 3
+- id: 0917-1122-konsolidierte-aggregation-je-ind
+  name: Konsolidierte Aggregation je Index
+  status: umgesetzt
+  beschreibung: Aggregiert die von der Regelwerk-Engine ausgewählten Märkte je Index zu einem
+    konsolidierten Wert und stellt ihn über eine API bereit.
+  kriterien:
+  - Aggregationslogik (z.B. liquiditätsgewichteter Durchschnitt) implementiert
+  - REST-Endpunkt liefert für einen Index-Namen den konsolidierten Wert plus Einzelmarkt-Details
+  tests:
+  - backend/tests/test_aggregation.py
+  - backend/tests/test_api.py
+  gruppe: grp-0917-1122-53c3
+  rang: 4
+- id: 0917-1122-on-demand-dashboard
+  name: On-Demand Dashboard
+  status: umgesetzt
+  beschreibung: Stellt eine Frontend-Ansicht bereit, über die ein Index per Klick abgerufen
+    und der konsolidierte Wert samt Einzelmärkten angezeigt wird — der Kernnutzen ist damit
+    Ende-zu-Ende erlebbar.
+  kriterien:
+  - Auswahl eines vordefinierten Index löst On-Demand-API-Abruf aus
+  - Ergebnis (Konsolidierter Wert, Einzelmärkte, Zeitstempel) wird übersichtlich dargestellt
+  tests:
+  - backend/tests/test_dashboard.py
+  - backend/tests/test_seed.py
+  gruppe: grp-0917-1122-53c3
+  rang: 5

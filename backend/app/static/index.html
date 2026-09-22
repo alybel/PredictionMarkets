@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PredictionMarketIndex</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<main>
+  <h1>PredictionMarketIndex</h1>
+  <p class="subtitle">Index wählen — Marktdaten werden on-demand von Polymarket und Kalshi abgerufen.</p>
+
+  <section id="eui" class="card">
+    <div class="eui-head">
+      <div>
+        <h2>Economic Uncertainty Index</h2>
+        <p class="hint">Täglich berechnet. Misst, wie uneinig der Markt über wirtschaftlich relevante Ereignisse ist (0 = Konsens, 100 = maximale Uneinigkeit). Quelle: Polymarket und Kalshi.</p>
+      </div>
+      <button id="eui-run" type="button">Tageslauf jetzt starten</button>
+    </div>
+    <div class="value-row">
+      <span class="big" id="eui-value">–</span>
+      <span class="kpi"><strong id="eui-date">–</strong>Stichtag</span>
+      <span class="kpi"><strong id="eui-count">–</strong>Bestandteile</span>
+      <span class="kpi"><strong id="eui-as-of">–</strong>Berechnet</span>
+    </div>
+    <svg id="eui-chart" viewBox="0 0 600 120" preserveAspectRatio="none" role="img" aria-label="Verlauf des Index"></svg>
+    <p id="eui-status" class="hint"></p>
+    <details class="eui-admin">
+      <summary>Prüfung der Zuordnung <span id="eui-pending" class="badge hidden"></span></summary>
+      <p class="hint">Das Sprachmodell schlägt Thema und Polung vor; bestätigen oder ablehnen Sie hier. Änderungen wirken sofort auf die nächste Berechnung.</p>
+      <table>
+        <thead><tr><th>Quelle</th><th>Markt</th><th>Polung</th><th>Begründung</th><th></th></tr></thead>
+        <tbody id="eui-proposals"></tbody>
+      </table>
+      <p id="eui-proposals-empty" class="hint hidden">Keine offenen Vorschläge.</p>
+    </details>
+    <details class="eui-admin">
+      <summary>Bestandteile und Plausibilität</summary>
+      <p id="eui-plausibility" class="hint"></p>
+      <table>
+        <thead><tr><th>Bestandteil</th><th class="num">Preis</th><th>Polung</th><th class="num">Beitrag</th><th class="num">Gewicht</th></tr></thead>
+        <tbody id="eui-constituents"></tbody>
+      </table>
+    </details>
+  </section>
+
+  <div class="index-bar">
+    <div id="index-buttons"></div>
+    <button id="new-index" type="button">+ Neuer Index</button>
+  </div>
+  <div id="new-index-form" class="card hidden">
+    <div class="row">
+      <input id="new-index-name" type="text" placeholder="Name des neuen Index" maxlength="128">
+      <button id="create-index" type="button">Anlegen</button>
+      <button id="cancel-new-index" type="button">Abbrechen</button>
+    </div>
+    <p class="hint">Die Parameter werden aus dem Panel „Parameter" übernommen (ohne gewählten Index: Standardwerte).</p>
+    <p id="new-index-error" class="error-text hidden"></p>
+  </div>
+  <p id="status">Lade Indizes …</p>
+
+  <section id="result" class="hidden">
+    <div class="card">
+      <div class="value-row">
+        <span class="big" id="value">–</span>
+        <span class="kpi"><strong id="method">–</strong>Methode</span>
+        <span class="kpi"><strong id="market-count">–</strong>Märkte</span>
+        <span class="kpi"><strong id="total-liquidity">–</strong>Liquidität ($)</span>
+        <span class="kpi"><strong id="total-volume">–</strong>Volumen ($)</span>
+        <span class="kpi"><strong id="as-of">–</strong>Stand</span>
+      </div>
+    </div>
+
+    <details id="params" class="card">
+      <summary>Parameter <span id="dirty-badge" class="badge hidden">ungespeicherte Änderungen</span></summary>
+      <div class="param-grid">
+        <div class="field">
+          <span>Keywords (Titel enthält mindestens eines; leer = keine Einschränkung)</span>
+          <div id="keyword-chips" class="chips"></div>
+          <input id="keyword-input" type="text" placeholder="Keyword eingeben und Enter drücken">
+        </div>
+        <div class="field">
+          <span>Tags (Markt trägt mindestens einen; leer = keine Einschränkung)</span>
+          <input id="tag-search" type="search" placeholder="Tags durchsuchen …">
+          <div id="tag-list" class="tag-list"></div>
+        </div>
+        <div class="field inline">
+          <span>Mindestliquidität (USD)</span>
+          <input id="min-liquidity" type="number" min="10000" step="1000">
+          <p class="hint">mindestens 10 000 USD (globale Schwelle der Grundgesamtheit)</p>
+        </div>
+        <div class="field inline">
+          <span>Preis-Korridor (0 ≤ min &lt; max ≤ 1)</span>
+          <input id="min-price" type="number" min="0" max="1" step="0.01"> –
+          <input id="max-price" type="number" min="0" max="1" step="0.01">
+        </div>
+      </div>
+      <p id="param-error" class="error-text hidden"></p>
+      <div class="actions">
+        <button id="save-rule" type="button" class="primary" disabled>Dauerhaft speichern</button>
+        <button id="discard-rule" type="button" disabled>Verwerfen</button>
+        <span class="spacer"></span>
+        <button id="delete-index" type="button" class="danger">Index löschen</button>
+        <span id="delete-confirm" class="hidden">Wirklich löschen?
+          <button id="delete-yes" type="button" class="danger">Ja, löschen</button>
+          <button id="delete-no" type="button">Nein</button>
+        </span>
+      </div>
+    </details>
+
+    <div class="card">
+      <div id="toolbar">
+        <input id="market-filter" type="search" placeholder="Märkte filtern (Titel/Tags) …">
+        <select id="source-filter"><option value="">Alle Quellen</option></select>
+        <button id="refresh" type="button">↻ Aktualisieren</button>
+      </div>
+      <p id="funnel" class="hidden"></p>
+      <table>
+        <thead>
+          <tr>
+            <th data-key="source">Quelle <span class="arrow"></span></th>
+            <th data-key="title">Markt <span class="arrow"></span></th>
+            <th data-key="category">Kategorie <span class="arrow"></span></th>
+            <th class="num" data-key="price">Preis <span class="arrow"></span></th>
+            <th class="num" data-key="volume">Volumen ($) <span class="arrow"></span></th>
+            <th class="num" data-key="liquidity">Liquidität ($) <span class="arrow"></span></th>
+          </tr>
+        </thead>
+        <tbody id="markets"></tbody>
+      </table>
+      <p id="empty-note" class="hidden">Kein Markt entspricht dem Filter.</p>
+    </div>
+  </section>
+</main>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const fmtNum = (v, digits = 0) =>
+  v == null ? "–" : Number(v).toLocaleString("de-DE", { maximumFractionDigits: digits });
+const METHOD_LABELS = {
+  liquidity_weighted: "liquiditätsgewichtet",
+  simple_average: "einfacher Durchschnitt",
+  no_data: "keine Daten",
+};
+
+// Interactive view state: stored rules, last payload plus current sort/filter selection.
+const state = { name: null, rules: {}, data: null, sortKey: null, sortDir: 1, filter: "", source: "" };
+
+// (Re)builds the index buttons from the stored rules; returns the index names.
+async function loadIndices() {
+  try {
+    const res = await fetch("/indices");
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    const indices = await res.json();
+    state.rules = Object.fromEntries(indices.map((idx) => [idx.index_name, idx]));
+    const container = $("index-buttons");
+    container.replaceChildren();
+    for (const idx of indices) {
+      const btn = document.createElement("button");
+      btn.textContent = idx.index_name;
+      btn.dataset.name = idx.index_name;
+      btn.addEventListener("click", () => loadIndex(idx.index_name, btn));
+      container.appendChild(btn);
+    }
+    if (!indices.length) {
+      $("result").classList.add("hidden");
+      setStatus("Keine Indizes definiert.", false);
+    } else {
+      setStatus("Index anklicken, um ihn abzurufen.", false);
+    }
+    return indices.map((idx) => idx.index_name);
+  } catch (err) {
+    setStatus("Indizes konnten nicht geladen werden: " + err.message, true);
+    return [];
+  }
+}
+
+function selectIndex(name) {
+  const btn = document.querySelector(`#index-buttons button[data-name="${CSS.escape(name)}"]`);
+  if (btn) btn.click();
+}
+
+// Filter funnel of the rule engine: survivor count after each stage.
+const FUNNEL_LABELS = [
+  ["loaded", "Geladen"], ["tags", "nach Tags"], ["keywords", "nach Keywords"],
+  ["liquidity", "nach Liquidität"], ["price", "nach Preis-Korridor"], ["end_date", "nach Enddatum"],
+];
+
+async function loadIndex(name, btn, refresh = false) {
+  state.name = name;
+  document.querySelectorAll("#index-buttons button").forEach((b) => b.classList.remove("active"));
+  if (btn) btn.classList.add("active");
+  setStatus("Rufe „" + name + "“ ab …", false);
+  $("result").classList.add("hidden");
+  try {
+    const res = await fetch("/indices/" + encodeURIComponent(name) + (refresh ? "?refresh=1" : ""));
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    render(await res.json());
+    setStatus("", false);
+    document.dispatchEvent(new CustomEvent("index-loaded", { detail: { name } }));
+  } catch (err) {
+    setStatus("Abruf fehlgeschlagen: " + err.message, true);
+  }
+}
+
+function render(data) {
+  state.data = data;
+  $("value").textContent = data.value == null ? "–" : (data.value * 100).toFixed(1) + " %";
+  $("method").textContent = METHOD_LABELS[data.method] || data.method;
+  $("market-count").textContent = data.market_count;
+  $("total-liquidity").textContent = fmtNum(data.total_liquidity);
+  $("total-volume").textContent = fmtNum(data.total_volume);
+  $("as-of").textContent = new Date(data.as_of).toLocaleString("de-DE");
+  renderFunnel(data.funnel);
+
+  const select = $("source-filter");
+  const sources = [...new Set(data.markets.map((m) => m.source))].sort();
+  select.replaceChildren(new Option("Alle Quellen", ""));
+  for (const s of sources) select.appendChild(new Option(s, s));
+  if (sources.includes(state.source)) select.value = state.source; else state.source = "";
+
+  renderTable();
+  $("result").classList.remove("hidden");
+}
+
+function renderFunnel(funnel) {
+  const el = $("funnel");
+  if (!funnel) { el.classList.add("hidden"); return; }
+  el.replaceChildren();
+  FUNNEL_LABELS.forEach(([key, label], i) => {
+    if (i > 0) el.appendChild(document.createTextNode(" → "));
+    const strong = document.createElement("strong");
+    strong.textContent = fmtNum(funnel[key]);
+    el.appendChild(document.createTextNode(label + " "));
+    el.appendChild(strong);
+  });
+  el.classList.remove("hidden");
+}
+
+const marketTags = (m) => (m.tags && m.tags.length ? m.tags : (m.category ? [m.category] : []));
+
+function visibleMarkets() {
+  const q = state.filter.trim().toLowerCase();
+  let rows = state.data.markets.filter(
+    (m) =>
+      (!state.source || m.source === state.source) &&
+      (!q || (m.title + " " + marketTags(m).join(" ")).toLowerCase().includes(q))
+  );
+  if (state.sortKey) {
+    const key = state.sortKey, dir = state.sortDir;
+    rows = [...rows].sort((a, b) => {
+      const [x, y] = [a[key], b[key]];
+      if (x == null) return 1;
+      if (y == null) return -1;
+      const cmp = typeof x === "number" ? x - y : String(x).localeCompare(String(y), "de");
+      return cmp * dir;
+    });
+  }
+  return rows;
+}
+
+function renderTable() {
+  document.querySelectorAll("th[data-key]").forEach((th) => {
+    th.querySelector(".arrow").textContent =
+      th.dataset.key === state.sortKey ? (state.sortDir === 1 ? "▲" : "▼") : "";
+  });
+  const rows = visibleMarkets();
+  $("empty-note").classList.toggle("hidden", rows.length > 0);
+  const tbody = $("markets");
+  tbody.replaceChildren();
+  for (const m of rows) {
+    const row = document.createElement("tr");
+    const cells = [
+      [m.source, ""], [marketTitle(m), ""], [marketTags(m).join(", ") || "–", "tags"],
+      [m.price == null ? "–" : Number(m.price).toFixed(3), "num"],
+      [fmtNum(m.volume), "num"], [fmtNum(m.liquidity), "num"],
+    ];
+    for (const [content, cls] of cells) {
+      const td = document.createElement("td");
+      if (content instanceof Node) td.appendChild(content); else td.textContent = content;
+      if (cls) td.className = cls;
+      row.appendChild(td);
+    }
+    tbody.appendChild(row);
+  }
+}
+
+function marketTitle(m) {
+  if (!m.url) return m.title;
+  const a = document.createElement("a");
+  a.href = m.url;
+  a.target = "_blank";
+  a.rel = "noopener noreferrer";
+  a.textContent = m.title;
+  return a;
+}
+
+$("market-filter").addEventListener("input", (e) => {
+  state.filter = e.target.value;
+  if (state.data) renderTable();
+});
+$("source-filter").addEventListener("change", (e) => {
+  state.source = e.target.value;
+  if (state.data) renderTable();
+});
+$("refresh").addEventListener("click", () => {
+  if (!state.name) return;
+  // The parameter panel cancels this event while it holds unsaved changes (previews instead).
+  const event = new CustomEvent("refresh-requested", { cancelable: true });
+  if (document.dispatchEvent(event)) loadIndex(state.name, activeButton(), true);
+});
+document.querySelectorAll("th[data-key]").forEach((th) => {
+  th.addEventListener("click", () => {
+    const key = th.dataset.key;
+    state.sortDir = state.sortKey === key ? -state.sortDir : 1;
+    state.sortKey = key;
+    if (state.data) renderTable();
+  });
+});
+
+const activeButton = () => document.querySelector("#index-buttons button.active");
+
+function setStatus(text, isError) {
+  const el = $("status");
+  el.textContent = text;
+  el.classList.toggle("error", isError);
+  el.classList.toggle("hidden", !text);
+}
+
+loadIndices();
+</script>
+<script src="/static/params.js"></script>
+<script src="/static/eui.js"></script>
+</body>
+</html>

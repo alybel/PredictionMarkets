@@ -1,0 +1,43 @@
+# Probe collect: every ~5 minutes fetch the six fixed markets (two batch requests)
+# and keep the run file as a workflow artifact. Commits happen hourly in probe-commit.yml.
+# GitHub may delay scheduled runs by a few minutes under load; gaps are logged, not prevented.
+name: Probe collect
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: probe-collect
+  cancel-in-progress: false
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -q -r requirements.txt
+
+      - name: Collect the fixed market set (exit code 1 on partial/failed run)
+        run: python -m backend.app.probe.collect --out probe/runs
+
+      - name: Keep the run file as artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: probe-run-${{ github.run_id }}-${{ github.run_attempt }}
+          path: probe/runs/*.json
+          retention-days: 7
+          if-no-files-found: warn

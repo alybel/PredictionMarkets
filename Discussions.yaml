@@ -1,0 +1,279 @@
+# Discussions.yaml — benannte Claude-Diskussionen (verwaltet von DevConsole)
+- id: disc-0922-1729-eingesetzte-technologien-klaren
+  name: Eingesetzte Technologien klären
+  thema: 'what technology are we using in this website? '
+  model: Standard
+  thinking: standard
+  erstellt: 2026-09-22 17:29
+  archiviert: 2026-09-22 17:37
+  ergebnis: 'Ins Ticket übernommen: Durchgaengiges Logging fuer Frontend und Backend (0922-1737-durchgaengiges-logging-fuer-fron)
+
+    Die Anwendung erhaelt ein einheitliches, nachvollziehbares Logging. Heute existiert lediglich
+    ein einzelner Logger in backend/app/clients/base.py.
+
+    Backend: zentrale Logging-Konfiguration mit Ausgabe in eine Logdatei und auf die Konsole,
+    einheitliches Format mit Zeitstempel und Stufe. Protokolliert werden Start und Stopp der
+    Anwendung, jeder API-Aufruf mit Pfad, Methode, Statuscode und Dauer, jeder Abruf der Marktdatenquellen
+    inklusive Trefferzahl und Fehlern, Treffer und Verfehlen des Markt-Caches sowie jede schreibende
+    Aenderung an Index-Regeln (Anlegen, Aendern, Loeschen).
+
+    Frontend: ein Logger, der Index-Wechsel, Parameter-Aenderungen, Speichern, Verwerfen,
+    Loeschen, Anlegen, Aktualisieren, Filter- und Sortierwechsel sowie aufgetretene Fehler
+    erfasst. Die Eintraege werden gebuendelt an einen neuen Endpunkt POST /logs gesendet und
+    dort in dieselbe Logdatei geschrieben, damit alles an einer Stelle zusammenlaeuft. Das
+    Senden darf die Bedienung nicht blockieren; faellt der Endpunkt aus, arbeitet die Oberflaeche
+    normal weiter.
+
+    Keine personenbezogenen Daten und keine Zugangsdaten im Log.
+
+    Definition of Done:
+
+    - Eine zentrale Logging-Konfiguration schreibt in eine Logdatei und auf die Konsole, mit
+    Zeitstempel und Stufe je Zeile
+
+    - Start und Stopp der Anwendung erzeugen je einen Logeintrag
+
+    - Jeder API-Aufruf wird mit Methode, Pfad, Statuscode und Dauer protokolliert
+
+    - Abrufe bei Polymarket und Kalshi werden mit Trefferzahl protokolliert, Fehler mit Stufe
+    Warnung oder Fehler
+
+    - Treffer und Verfehlen des Markt-Caches sind im Log unterscheidbar
+
+    - Anlegen, Aendern und Loeschen einer Index-Regel erzeugen je einen Eintrag mit dem betroffenen
+    Namen
+
+    - Der Endpunkt POST /logs nimmt gebuendelte Frontend-Eintraege entgegen und schreibt sie
+    in dieselbe Logdatei
+
+    - Das Frontend protokolliert Index-Wechsel, Parameter-Aenderungen, Speichern, Verwerfen,
+    Loeschen, Anlegen, Aktualisieren, Filter- und Sortierwechsel sowie Fehler
+
+    - Ein Ausfall des Log-Endpunkts beeintraechtigt keine Funktion der Oberflaeche
+
+    - Logs enthalten keine Zugangsdaten und keine personenbezogenen Daten
+
+    Testumfang:
+
+    - Backend-Test: Ein Aufruf von GET /indices erzeugt einen Logeintrag mit Methode, Pfad
+    und Statuscode
+
+    - Backend-Test: POST /logs mit einer Liste von Eintraegen antwortet mit Erfolg und schreibt
+    jeden Eintrag ins Log
+
+    - Backend-Test: POST /logs mit fehlerhaftem Rumpf wird mit Statuscode 422 abgewiesen
+
+    - Backend-Test: Ein Fehler beim Abruf einer Marktquelle erzeugt einen Eintrag der Stufe
+    Warnung, ohne den Abruf des Index abzubrechen
+
+    - Backend-Test: Zwei aufeinanderfolgende Abrufe erzeugen einen Cache-Verfehlt- und einen
+    Cache-Treffer-Eintrag
+
+    - Backend-Test: PUT und DELETE auf eine Index-Regel erzeugen je einen Eintrag mit dem
+    Regelnamen
+
+    - Frontend-Test: Ein Index-Wechsel erzeugt einen Logeintrag im Puffer
+
+    - Frontend-Test: Gepufferte Eintraege werden gebuendelt an POST /logs gesendet
+
+    - Frontend-Test: Schlaegt POST /logs fehl, bleibt die Oberflaeche bedienbar und es erscheint
+    keine Fehlermeldung fuer den Nutzer'
+- id: disc-0919-1818-app-absturz
+  name: App-Absturz
+  thema: Why did the app crash?
+  model: Standard
+  thinking: standard
+  erstellt: 2026-09-19 18:18
+  ergebnis: 'Ins Ticket übernommen: Marktdaten-Abruf nicht mehr unter dem Cache-Lock ausführen
+    (bug-0919-1827-marktdaten-abruf-nicht-mehr-unte)
+
+    MarketCache.get hält das Lock während des gesamten externen Abrufs (bis zu 30 Seiten sequenziell,
+    je 10 s Timeout). Jede andere Anfrage (zweiter Index, /tags, Vorschau) wartet solange;
+    das Dashboard wirkt eingefroren. „Aktualisieren“ mit ungespeicherten Änderungen erzwingt
+    zudem jedes Mal einen kompletten Neuabruf.
+
+
+    Umfang:
+
+    - Der externe Abruf läuft außerhalb des Locks; das Lock schützt nur den Zustand (Snapshot,
+    Zeitstempel, laufender Abruf).
+
+    - Läuft bereits ein Abruf, warten weitere Anfragen auf dessen Ergebnis statt einen zweiten
+    Abruf zu starten (Single-Flight).
+
+    - Liegt ein Snapshot vor und ist er abgelaufen, wird er sofort zurückgegeben und der Neuabruf
+    läuft im Hintergrund (Stale-while-revalidate). Nur ohne Snapshot wird gewartet.
+
+    - force=True (Aktualisieren) startet einen Neuabruf, falls keiner läuft, und wartet auf
+    dessen Ergebnis; ein bereits laufender Abruf wird wiederverwendet.
+
+    - Ein Gesamt-Zeitbudget für den Abruf aller Quellen (Konstante, Standard 60 s); nach Ablauf
+    werden die bis dahin geladenen Märkte verwendet und eine Warnung geloggt.
+
+    - Bestehende Schnittstelle MarketCache.get(force) und clear() bleibt erhalten; API und
+    Dashboard unverändert.
+
+    Definition of Done:
+
+    - Während ein Abruf läuft, liefert get() mit vorhandenem Snapshot sofort den alten Snapshot
+    zurück.
+
+    - Zwei gleichzeitige Aufrufe ohne Snapshot lösen genau einen Abruf des Loaders aus.
+
+    - get(force=True) liefert den frischen Snapshot; ein parallel laufender Abruf wird nicht
+    verdoppelt.
+
+    - Überschreitet der Abruf das Zeitbudget, werden die bisher geladenen Märkte übernommen
+    und eine Warnung geloggt.
+
+    - Bestehende Tests für Cache, API und Dashboard bleiben grün.
+
+    - Alle Dateien unter 500 Zeilen; Changelog.md und Requirements.log aktualisiert.
+
+    Testumfang:
+
+    - Test: Abgelaufener Snapshot wird bei laufendem Abruf sofort zurückgegeben (Loader blockiert
+    über Event).
+
+    - Test: Zwei parallele get()-Aufrufe ohne Snapshot rufen den Loader genau einmal auf.
+
+    - Test: get(force=True) wartet auf den Neuabruf und liefert das neue Ergebnis.
+
+    - Test: Zeitbudget überschritten (gefakte Uhr) führt zu Teilergebnis plus Warnung im Log.
+
+    - Test: clear() verwirft Snapshot; nächster get() lädt neu.'
+- id: disc-0919-1621-metriken-erweitern
+  name: Metriken erweitern
+  thema: 'Hier sind nur wenige Metriken drin, wie können wir erweitern? '
+  model: Standard
+  thinking: standard
+  erstellt: 2026-09-19 16:21
+  bild: .devconsole/discussions/F1C26596-0B7D-4B92-801C-A76052C156DA.png
+  archiviert: 2026-09-19 16:29
+  ergebnis: 'Ins Ticket übernommen: Index-Parameter im Frontend anpassen, Vorschau/Speichern,
+    Indizes anlegen und löschen (0919-1629-index-parameter-im-frontend-anpa)
+
+    Pro Index sollen die Parameter (Keywords, Tags/Kategorien, Mindestliquidität, Preis-Korridor)
+    direkt im Dashboard anpassbar sein. Änderungen wirken zunächst nur als Vorschau (temporär
+    ausprobieren, DB unverändert) und können auf Wunsch dauerhaft gespeichert werden. Zusätzlich
+    sollen neue Indizes angelegt und bestehende gelöscht werden können.
+
+    Beschlossener Umfang:
+
+    - Neue Endpoints: Vorschau (Regel im Request-Body, berechnet Index-Wert, Trichter und
+    Märkte ohne zu speichern), PUT /indices/{name} (Regel speichern), POST /indices (Index
+    anlegen), DELETE /indices/{name} (Index löschen). Validierung: Name eindeutig, min_liquidity
+    >= 10 000 USD, 0 <= min_price < max_price <= 1.
+
+    - Dashboard: aufklappbares Panel "Parameter" pro Index mit Keyword-Chips (hinzufügen/entfernen),
+    Tag-Mehrfachauswahl (Liste aus den tatsächlich gelieferten Tags der Grundgesamtheit),
+    Eingaben für Mindestliquidität (Hinweis: mindestens 10 000 USD) und Preis-Korridor.
+
+    - Jede Änderung im Panel löst sofort eine Vorschau aus: Kopfzeile, Trichter und Tabelle
+    aktualisieren sich; die gespeicherte Regel bleibt unverändert. Markierung "ungespeicherte
+    Änderungen".
+
+    - Knöpfe "Dauerhaft speichern" (PUT, Markierung verschwindet) und "Verwerfen" (zurück
+    zur gespeicherten Regel).
+
+    - Knopf "Neuer Index": Name plus Parameter, wird nach Anlegen ausgewählt. Knopf "Index
+    löschen" mit Rückfrage; danach wird der erste verbleibende Index ausgewählt.
+
+    - Bestehende Funktionalität (Index-Auswahl, Tabelle, Quellenfilter, Titelfilter, Aktualisieren)
+    bleibt erhalten.
+
+    Definition of Done:
+
+    - Vorschau-Endpoint liefert dieselbe Antwortstruktur wie GET /indices/{name}, ohne die
+    Regel in der DB zu verändern.
+
+    - PUT/POST/DELETE funktionieren mit Validierung (400 bei ungültigen Werten, 404 bei unbekanntem
+    Index, 409 bei doppeltem Namen).
+
+    - Panel zeigt die gespeicherten Parameter, Änderungen lösen eine Vorschau aus, Markierung
+    für ungespeicherte Änderungen sichtbar.
+
+    - Speichern persistiert; nach Neuladen der Seite sind die Werte vorhanden. Verwerfen stellt
+    die gespeicherte Regel wieder her.
+
+    - Index anlegen und löschen funktionieren aus dem Dashboard; gelöschte Indizes kehren
+    nach Neustart nicht zurück.
+
+    - Alle Dateien unter 500 Zeilen; Changelog.md und Requirements.log aktualisiert.
+
+    Testumfang:
+
+    - Vorschau mit geänderten Keywords liefert andere Marktauswahl; anschließendes GET /indices
+    zeigt die unveränderte Regel.
+
+    - PUT mit gültigen Werten speichert; GET /indices spiegelt die neuen Werte.
+
+    - PUT mit min_liquidity 500 -> 400; PUT mit min_price >= max_price -> 400; PUT auf unbekannten
+    Index -> 404.
+
+    - POST mit neuem Namen legt Index an; POST mit vorhandenem Namen -> 409.
+
+    - DELETE entfernt Index; anschließendes GET /indices/{name} -> 404.
+
+    - Frontend-Logik (falls testbar ohne Browser): Zustand "ungespeichert" wird nach Speichern
+    zurückgesetzt, nach Verwerfen die gespeicherte Regel wiederhergestellt.
+
+    - Keine Live-API-Aufrufe in Tests.'
+- id: disc-0918-2022-index-definition-in-der-app
+  name: Index-Definition in der App
+  thema: wie können wir gut einen Index definieren in der App
+  model: Fable
+  thinking: standard
+  erstellt: 2026-09-18 20:22
+  bild: .devconsole/discussions/CB2D6A1F-A9F6-4B3A-8796-BAB08705A6EB.png
+  archiviert: 2026-09-19 16:30
+  ergebnis: 'Worum es ging: Wie Prediction-Markets semantisch und weltgeschehen-adaptiv einem
+    Index zugeordnet werden können.
+
+    Stand:
+
+    - Charter statt Keywords: jeder Index bekommt eine Prosa-Beschreibung; Keywords bleiben
+    nur als billiger Vorfilter/Fallback.
+
+    - Lokale Embeddings (sentence-transformers), einmal pro neuem Markt berechnet und gecacht;
+    Auswahl per Kosinus-Ähnlichkeit gegen die Charter + harte Filter (Liquidität, Preisband,
+    Event-Dedupe).
+
+    - Haiku-Klassifikation für Grauzonen-Fälle, einmalig pro Markt × Index, Ergebnis (Urteil
+    + Polarität + Modellversion) in Membership-Tabelle gecacht; in Tests gemockt, nie live.
+
+    - Manuelle Include/Exclude-Overrides pro Index als letzte Instanz.
+
+    - Indexwert: Basis-100-Zeitreihe mit Polarität als Vorzeichen der Änderung; Rebalancing
+    täglich über die Membership-Tabelle (Mitgliedschaft zum Stichtag einfrieren).
+
+    Offen:
+
+    - Datenmodell konkretisieren und als Ticket ausformulieren (Market+Embedding-Feld, Index-Definition-Tabelle
+    mit charter/threshold, Membership/Classification-Tabelle).'
+- id: disc-0918-1620-projektstand
+  name: Projektstand
+  thema: tell me where we stand
+  model: Standard
+  thinking: standard
+  erstellt: 2026-09-18 16:20
+  archiviert: 2026-09-18 20:22
+  ergebnis: 'Worum es ging: Prediction-Market-Index-Projekt – Review des aktuellen Stands
+    und Planung der fehlenden Indizes plus Historie-Feature.
+
+    Stand:
+
+    - Nutzer hat entschieden: Ja zu allem, zwei separate Tickets, Keywords wie vorgeschlagen
+    (middle-east, oil, market-fear).
+
+    - Ticket A (fehlende Indizes): Keyword-Regeln in seed.py + 3 Testfälle, dev.db seeden.
+
+    - Ticket B (Historie): neue Tabelle index_snapshots (Migration 0002), Snapshot bei jedem
+    Abruf von GET /indices/{name}, neuer Endpunkt GET /indices/{name}/history, Dashboard zeigt
+    Delta + Verlauf. Snapshot bei jedem Klick (kein Entprellen), Markt-Details als JSON im
+    Snapshot.
+
+    Offen:
+
+    - Umsetzung der beiden Tickets ist noch nicht gestartet – als Nächstes: Implementierung
+    anstoßen (Migration, seed.py, API-Endpunkt, Dashboard-Anpassung).'

@@ -1,0 +1,13 @@
+{
+  "_comment": "Fixed market set for the GitHub Actions probe (see ActionsReadme.md). Chosen by hand on 2026-09-22 from the economics groups: policy rate, CPI, unemployment rate. Kalshi ids are tickers, Polymarket ids are Gamma market ids.",
+  "kalshi": [
+    {"id": "KXFEDDECISION-26DEC-H25", "topic": "fed_rate", "note": "Fed hikes 25 bps at the December 2026 meeting; closes 2026-12-09"},
+    {"id": "KXCPI-26SEP-T0.4", "topic": "cpi", "note": "CPI rises more than 0.4% in September 2026; closes 2026-10-14"},
+    {"id": "KXU3-26SEP-T3.9", "topic": "unemployment", "note": "U-3 unemployment above 3.9% in September 2026; closes 2026-10-02"}
+  ],
+  "polymarket": [
+    {"id": "2589812", "topic": "fed_rate", "note": "No change in Fed rates after the October 2026 meeting; ends 2026-10-29"},
+    {"id": "4469385", "topic": "cpi", "note": "Annual inflation 3.0% in September 2026; ends 2026-10-15"},
+    {"id": "4217155", "topic": "unemployment", "note": "September 2026 unemployment rate 4.0%; ends 2026-10-02"}
+  ]
+}

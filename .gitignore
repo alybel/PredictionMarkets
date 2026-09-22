@@ -1,0 +1,13 @@
+# Local environment and caches
+.venv/
+__pycache__/
+.pytest_cache/
+logs/
+*.bak
+
+# Local development database and tool state (the repository is public: keep private files out)
+backend/dev.db
+.devconsole/
+
+# Probe run files are kept as workflow artifacts, only probe/data/ is committed
+probe/runs/

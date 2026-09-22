@@ -1,0 +1,154 @@
+# BugReports.yaml — Bug-Register (verwaltet von DevConsole)
+# Status: offen | in-arbeit | behoben | verworfen
+- id: bug-0919-1827-marktdaten-abruf-nicht-mehr-unte
+  titel: Marktdaten-Abruf nicht mehr unter dem Cache-Lock ausführen
+  status: offen
+  beschreibung: 'MarketCache.get hält das Lock während des gesamten externen Abrufs (bis zu
+    30 Seiten sequenziell, je 10 s Timeout). Jede andere Anfrage (zweiter Index, /tags, Vorschau)
+    wartet solange; das Dashboard wirkt eingefroren. „Aktualisieren“ mit ungespeicherten Änderungen
+    erzwingt zudem jedes Mal einen kompletten Neuabruf.
+
+
+    Umfang:
+
+    - Der externe Abruf läuft außerhalb des Locks; das Lock schützt nur den Zustand (Snapshot,
+    Zeitstempel, laufender Abruf).
+
+    - Läuft bereits ein Abruf, warten weitere Anfragen auf dessen Ergebnis statt einen zweiten
+    Abruf zu starten (Single-Flight).
+
+    - Liegt ein Snapshot vor und ist er abgelaufen, wird er sofort zurückgegeben und der Neuabruf
+    läuft im Hintergrund (Stale-while-revalidate). Nur ohne Snapshot wird gewartet.
+
+    - force=True (Aktualisieren) startet einen Neuabruf, falls keiner läuft, und wartet auf
+    dessen Ergebnis; ein bereits laufender Abruf wird wiederverwendet.
+
+    - Ein Gesamt-Zeitbudget für den Abruf aller Quellen (Konstante, Standard 60 s); nach Ablauf
+    werden die bis dahin geladenen Märkte verwendet und eine Warnung geloggt.
+
+    - Bestehende Schnittstelle MarketCache.get(force) und clear() bleibt erhalten; API und
+    Dashboard unverändert.'
+  kriterien:
+  - Während ein Abruf läuft, liefert get() mit vorhandenem Snapshot sofort den alten Snapshot
+    zurück.
+  - Zwei gleichzeitige Aufrufe ohne Snapshot lösen genau einen Abruf des Loaders aus.
+  - get(force=True) liefert den frischen Snapshot; ein parallel laufender Abruf wird nicht
+    verdoppelt.
+  - Überschreitet der Abruf das Zeitbudget, werden die bisher geladenen Märkte übernommen
+    und eine Warnung geloggt.
+  - Bestehende Tests für Cache, API und Dashboard bleiben grün.
+  - Alle Dateien unter 500 Zeilen; Changelog.md und Requirements.log aktualisiert.
+  erstellt: 2026-09-19 18:27
+  tests:
+  - 'Test: Abgelaufener Snapshot wird bei laufendem Abruf sofort zurückgegeben (Loader blockiert
+    über Event).'
+  - 'Test: Zwei parallele get()-Aufrufe ohne Snapshot rufen den Loader genau einmal auf.'
+  - 'Test: get(force=True) wartet auf den Neuabruf und liefert das neue Ergebnis.'
+  - 'Test: Zeitbudget überschritten (gefakte Uhr) führt zu Teilergebnis plus Warnung im Log.'
+  - 'Test: clear() verwirft Snapshot; nächster get() lädt neu.'
+  gruppe: grp-0919-1827-1c4b
+  rang: 3
+- id: bug-0919-1827-hot-reload-auf-backend-app-besch
+  titel: Hot-Reload auf backend/app beschränken
+  status: offen
+  beschreibung: 'start_dev.sh startet Uvicorn mit --reload über das gesamte Projekt. Dadurch
+    lösen Änderungen an Testdateien (backend/tests/*.py) und Tooling Neustarts des Servers
+    aus, die laufende Anfragen abbrechen und den Marktdaten-Cache leeren. Am 2026-09-19 gab
+    es dadurch sieben Neustarts während der Ticket-Läufe.
+
+
+    Umfang:
+
+    - start_dev.sh übergibt --reload-dir backend/app, sodass nur Änderungen am Anwendungscode
+    einen Neustart auslösen.
+
+    - start.sh bleibt unverändert (kein Reload).
+
+    - Port, Adress-Ausgabe und Vordergrund-Start bleiben wie bisher.'
+  kriterien:
+  - start_dev.sh enthält --reload und --reload-dir backend/app.
+  - Eine Änderung an backend/tests/*.py löst keinen Neustart aus; eine Änderung an backend/app/*.py
+    löst einen Neustart aus.
+  - start.sh ist unverändert.
+  - Changelog.md und Requirements.log aktualisiert.
+  erstellt: 2026-09-19 18:27
+  tests:
+  - 'Test: start_dev.sh enthält die Optionen --reload und --reload-dir backend/app.'
+  - 'Test: start.sh enthält kein --reload.'
+  gruppe: grp-0919-1827-1c4b
+  rang: 2
+- id: bug-0919-1629-grundgesamtheit-der-markte-vergr
+  titel: Grundgesamtheit der Märkte vergrößern (Pagination, Kalshi-Events, Tags, Filter-Trichter)
+  status: behoben
+  beschreibung: 'Heute landen pro Index nur wenige Märkte (z. B. zwei bei global-politics),
+    weil nur 100 Märkte je Quelle ohne Pagination geladen werden, Kalshi unsortiert beliebige
+    Märkte liefert, die Event-Tags verworfen werden und der Keyword-Filter sehr eng ist.
+
+    Beschlossener Umfang:
+
+    - Feste globale Illiquiditätsschwelle: Märkte mit Liquidität unter 10 000 USD gehören
+    nicht zur Grundgesamtheit (Konstante, nicht pro Index änderbar). Beide Quellen quotieren
+    in USD; keine EUR-Umrechnung.
+
+    - Polymarket: Pagination nach Liquidität absteigend, Abbruch sobald die Liquidität unter
+    10 000 USD fällt.
+
+    - Kalshi: Abruf über /events (Kategorien wie Politics, Economics, World) mit verschachtelten
+    Märkten; Filter Liquidität >= 10 000 USD.
+
+    - Tags/Kategorien beider Quellen in das gemeinsame Markt-Schema übernehmen (mehrere Tags
+    pro Markt möglich); im Dashboard in der Spalte Kategorie anzeigen.
+
+    - Regel-Engine: Kategorie-Filter matcht gegen die Tag-Liste eines Markts (case-insensitiv);
+    Keywords bleiben zusätzliche Einschränkung auf den Titel. Leere Listen bedeuten weiterhin
+    keine Einschränkung.
+
+    - min_liquidity pro Index bleibt Parameter, darf aber die globale Schwelle nicht unterschreiten
+    (wird auf 10 000 USD angehoben).
+
+    - Seeds erweitern: global-politics und global-economics mit Tags und breiteren Keyword-Listen
+    (z. B. trump, congress, senate, house, ceasefire, israel, iran, ukraine, russia, china,
+    fed, inflation, tariff, recession, gdp).
+
+    - Seed legt vordefinierte Indizes nur an, wenn noch kein Index existiert (damit gelöschte
+    Indizes nicht wiederkehren).
+
+    - API-Antwort von GET /indices/{name} enthält einen Filter-Trichter: Anzahl geladen ->
+    nach Tags -> nach Keywords -> nach Liquidität -> nach Preis-Korridor -> nach Enddatum;
+    das Dashboard zeigt den Trichter als eine Zeile über der Tabelle an.
+
+    - Serverseitiger Cache der Rohmarktdaten (ca. 60 s), damit wiederholte Abrufe und spätere
+    Parameter-Änderungen die externen APIs nicht jedes Mal treffen; Knopf Aktualisieren erzwingt
+    Neuabruf.
+
+    - Bestehende Funktionalität (Index-Wert, Methode, Summen, Tabelle, Quellenfilter, Titelfilter)
+    bleibt erhalten.'
+  kriterien:
+  - Polymarket-Client lädt seitenweise und bricht ab, sobald die Liquidität unter 10 000 USD
+    fällt; kein Markt unter der Schwelle wird zurückgegeben.
+  - Kalshi-Client liefert Märkte aus /events der konfigurierten Kategorien mit Kategorie/Tags
+    und filtert Liquidität >= 10 000 USD.
+  - NormalizedMarket und Market-Tabelle tragen eine Tag-Liste; Migration vorhanden.
+  - market_matches prüft Kategorien gegen die Tag-Liste; Keyword-Verhalten unverändert.
+  - upsert_rule hebt min_liquidity unter 10 000 USD auf 10 000 USD an.
+  - GET /indices/{name} liefert das Feld funnel mit den Zählständen je Filterstufe; Dashboard
+    zeigt sie an.
+  - Seed erzeugt Indizes nur bei leerer Tabelle; Seeds enthalten Tags und erweiterte Keywords.
+  - Rohmarktdaten werden serverseitig ca. 60 s gecacht; Aktualisieren umgeht den Cache.
+  - Alle Dateien unter 500 Zeilen; Changelog.md und Requirements.log aktualisiert.
+  erstellt: 2026-09-19 16:29
+  screenshot: .devconsole/bugs/bug-0919-1629-grundgesamtheit-der-markte-vergr.png
+  fix: Beide Clients luden nur 100 unsortierte Märkte ohne Tags und der Keyword-Filter war
+    eng; jetzt paginieren Polymarket (/events nach Liquidität) und Kalshi (/events mit Cursor)
+    bis zur globalen Schwelle von 10 000 USD, Tags fließen ins Schema und in den Tag-Filter
+    der Engine, Seeds sind breiter, die API liefert einen Filter-Trichter und cached die Rohdaten
+    60 s.
+  tests:
+  - backend/tests/test_market_population.py
+  - backend/tests/test_clients.py
+  - backend/tests/test_engine.py
+  - backend/tests/test_seed.py
+  - backend/tests/test_migration.py
+  - backend/tests/test_api.py
+  gruppe: grp-0919-1629-30c2
+  rang: 1
