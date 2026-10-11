@@ -1,0 +1,7 @@
+# Dependabot meldet veraltete GitHub-Actions-Bausteine wöchentlich als Pull Request.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
