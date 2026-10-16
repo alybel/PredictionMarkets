@@ -11,7 +11,6 @@
     no-cache, sodass immer der aktuelle Code geladen wird.'
   testdateien:
   - backend/tests/test_dashboard.py
-  hinweis: "\U0001F7E1 1 offener Punkt — in der Abnahme ansehen"
 - id: bug-1015-1316-leere-aktien-detailansicht-beheb
   titel: Leere Aktien-Detailansicht beheben (Namenskonflikt fmtShare) + JS-Fehler-Logging
   status: behoben
