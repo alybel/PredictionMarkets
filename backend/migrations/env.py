@@ -6,6 +6,12 @@ from sqlalchemy import create_engine
 from backend.app.db import Base, get_database_url
 from backend.app import models  # noqa: F401  (registers tables on Base.metadata)
 from backend.app.eui import models as eui_models  # noqa: F401
+from backend.app.manufacture import models as manufacture_models  # noqa: F401
+from backend.app.stocks import models as stocks_models  # noqa: F401
+from backend.app.fed import models as fed_models  # noqa: F401
+from backend.app.staging import models as staging_models  # noqa: F401
+from backend.app.metrics import models as metrics_models  # noqa: F401
+from backend.app.builder import models as builder_models  # noqa: F401
 
 target_metadata = Base.metadata
 

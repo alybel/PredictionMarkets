@@ -18,7 +18,8 @@ def test_kalshi_converts_cents_and_contracts_to_dollars():
     assert m.price == 0.55
     assert m.best_bid == 0.54 and m.best_ask == 0.57
     assert m.volume_24h == pytest.approx(1000 * 0.55)  # contracts x price
-    assert m.liquidity == 2500.0  # cents / 100, open interest not used
+    assert m.liquidity == m.volume_24h  # liquidity = 24h turnover
+    assert m.depth == 2500.0  # cents / 100, open interest not used
     assert m.active is True
 
 
@@ -26,7 +27,7 @@ def test_kalshi_prefers_dollar_fields_and_reports_inactive_status():
     item = {"ticker": "T", "title": "x", "status": "closed", "last_price_dollars": "0.30", "yes_bid_dollars": "0.29",
             "yes_ask_dollars": "0.31", "volume_24h_fp": "200.0", "liquidity_dollars": "12.5"}
     m = KalshiClient()._normalize(item)
-    assert (m.best_bid, m.best_ask, m.volume_24h, m.liquidity, m.active) == (0.29, 0.31, 60.0, 12.5, False)
+    assert (m.best_bid, m.best_ask, m.volume_24h, m.liquidity, m.depth, m.active) == (0.29, 0.31, 60.0, 60.0, 12.5, False)
 
 
 def test_polymarket_reads_order_book_and_activity_flags():
@@ -67,12 +68,12 @@ def test_exclusion_reasons(kwargs, reason):
 
 
 def test_harmonize_carries_fields_and_eligibility():
-    h = harmonize(market(liquidity=1000.0, volume_24h=200.0, best_bid=0.40, best_ask=0.50))
+    h = harmonize(market(liquidity=200.0, depth=1000.0, volume_24h=200.0, best_bid=0.40, best_ask=0.50))
     assert h.key == ("polymarket", "pm-1")
     assert h.depth_usd == 1000.0 and h.volume_24h_usd == 200.0
     assert h.spread == pytest.approx(0.10)
     assert h.liquidity_score == pytest.approx(600.0)
     assert h.eligible and h.exclusion_reason is None and h.end_date == FUTURE
-    ineligible = harmonize(market(price=0.99, liquidity=None, volume_24h=None))
+    ineligible = harmonize(market(price=0.99, liquidity=None, depth=None, volume_24h=None))
     assert not ineligible.eligible and ineligible.exclusion_reason == "price_outside_corridor"
     assert ineligible.liquidity_score == 0.0

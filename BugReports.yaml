@@ -1,5 +1,71 @@
 # BugReports.yaml — Bug-Register (verwaltet von DevConsole)
 # Status: offen | in-arbeit | behoben | verworfen
+- id: bug-1015-2222-neuer-index-wird-nicht-gebaut
+  titel: Neuer Index wird nicht gebaut
+  status: behoben
+  beschreibung: New Index doesnt get built, I dont see anything
+  erstellt: 2026-10-15 22:22
+  screenshot: .devconsole/bugs/bug-1015-2222-neuer-index-wird-nicht-gebaut.png
+  fix: 'Der Browser verwendete nach dem Update zwischengespeicherte alte JS-Dateien, die die
+    neuen Metrik-Indizes gar nicht abfragten; Startseite und /static senden jetzt Cache-Control:
+    no-cache, sodass immer der aktuelle Code geladen wird.'
+  testdateien:
+  - backend/tests/test_dashboard.py
+  hinweis: "\U0001F7E1 1 offener Punkt — in der Abnahme ansehen"
+- id: bug-1015-1316-leere-aktien-detailansicht-beheb
+  titel: Leere Aktien-Detailansicht beheben (Namenskonflikt fmtShare) + JS-Fehler-Logging
+  status: behoben
+  beschreibung: 'Klick auf eine Aktie in der Aktien-Korrelation zeigt nur den Ticker; Kennzahlen,
+    Charts, Robustheit, Attribution und Trades bleiben leer, es geht keine Anfrage ans Backend.
+    Ursache: attribution.js:7 und correlation.js:13 deklarieren beide top-level `const fmtShare`;
+    der Browser verwirft daher attribution.js komplett, loadTrades() bricht in trades.js:32
+    bei loadAttribution(...) ab. Der Fehler erscheint nicht im App-Log.
+
+    Umfang:
+
+    1. Hilfsfunktion in attribution.js umbenennen (z. B. fmtContribution); Format „+0,123“
+    bleibt unverändert.
+
+    2. trades.js: Trades und Attribution unabhängig voneinander laden; ein Fehler der Attribution
+    darf Performance, Renditeverläufe, Robustheit und Trade-Liste nicht verhindern (Fehler
+    wird geloggt).
+
+    3. Globaler Fehler-Fänger im Frontend (window.onerror + unhandledrejection, in shell.js)
+    meldet JS-Fehler mit Meldung, Datei und Zeile an /client-log.
+
+    4. Neuer Test: keine zwei Skripte unter backend/app/static/ deklarieren denselben top-level-Namen
+    (const/let/function/class). Ohne Browser, ohne Netzwerk, läuft in CI auf frischem Klon.'
+  kriterien:
+  - Klick auf „SO“ zeigt Titel „SO · Southern Company“, KPIs, beide Charts, Robustheit, Attribution
+    und Trade-Liste.
+  - attribution.js lädt ohne „Identifier has already been declared“-Fehler in der Browser-Konsole.
+  - Schlägt die Attribution fehl, werden Trades und Charts trotzdem angezeigt und ein Fehler-Eintrag
+    erscheint im Log.
+  - Ein ungefangener JS-Fehler im Frontend erscheint in logs/app.log mit Meldung, Datei und
+    Zeile.
+  - Neuer Duplikat-Test schlägt mit dem alten Konflikt fehl und ist nach dem Fix grün.
+  - Alle bestehenden Tests bleiben grün; Changelog.md und Requirements.log sind aktualisiert.
+  erstellt: 2026-10-15 13:16
+  screenshot: .devconsole/bugs/bug-1015-1316-leere-aktien-detailansicht-beheb.png
+  fix: attribution.js und correlation.js deklarierten beide global `const fmtShare`, wodurch
+    der Browser attribution.js verwarf und loadTrades() abbrach; die Funktion heißt jetzt
+    fmtContribution, trades.js lädt die Attribution entkoppelt mit Fehler-Logging, und shell.js
+    meldet ungefangene JS-Fehler mit Meldung, Datei und Zeile an /client-log.
+  tests:
+  - Test scannt alle .js-Dateien unter backend/app/static/ auf top-level-Deklarationen und
+    schlägt bei doppeltem Namen über Dateien hinweg fehl (mit Dateinamen in der Fehlermeldung).
+  - 'Test: Duplikat-Erkennung meldet einen künstlich doppelten Namen in zwei Beispiel-Skripten
+    (Negativfall).'
+  - 'Test: attribution.js enthält kein top-level `fmtShare` mehr und das Zahlenformat der
+    Attribution bleibt „+0,123“.'
+  - 'Test: shell.js registriert Handler für window.onerror und unhandledrejection, die an
+    /client-log senden.'
+  - 'Test: POST /client-log mit einem JS-Fehler-Event (Meldung, Datei, Zeile) wird mit 204
+    angenommen und ins App-Log geschrieben.'
+  - Bestehende Tests zu GET /indices/{name}/correlation/{ticker} und .../attribution bleiben
+    grün.
+  testdateien:
+  - backend/tests/test_static_js.py
 - id: bug-0919-1827-marktdaten-abruf-nicht-mehr-unte
   titel: Marktdaten-Abruf nicht mehr unter dem Cache-Lock ausführen
   status: offen

@@ -1,15 +1,15 @@
 """Polymarket client (Gamma API).
 
 Markets are loaded via ``/events`` because only events carry tags. Events
-are paged by liquidity descending; paging stops as soon as an event's
-liquidity falls below the client's liquidity floor (an event's liquidity
-is the sum of its markets, so no later market can pass the floor either);
-without a floor every active event is loaded.
+are paged by 24h volume descending (the liquidity figure); paging stops as
+soon as an event's 24h volume falls below the client's liquidity floor (an
+event's volume is the sum of its markets, so no later market can pass the
+floor either); without a floor every active event is loaded.
 """
 
 import json
 
-from backend.app.clients.base import BaseClient, NormalizedMarket, clean_tags, parse_datetime, parse_float
+from backend.app.clients.base import BaseClient, NormalizedMarket, basis_of, clean_tags, clean_text, parse_datetime, parse_float
 
 GAMMA_EVENTS_URL = "https://gamma-api.polymarket.com/events"
 POLYMARKET_WEB_URL = "https://polymarket.com"
@@ -27,7 +27,7 @@ class PolymarketClient(BaseClient):
                 params={
                     "active": "true",
                     "closed": "false",
-                    "order": "liquidity",
+                    "order": "volume24hr",
                     "ascending": "false",
                     "limit": PAGE_SIZE,
                     "offset": page * PAGE_SIZE,
@@ -40,12 +40,12 @@ class PolymarketClient(BaseClient):
         return items
 
     def _collect(self, events: list, items: list) -> bool:
-        """Append the events' markets (with tags); False once liquidity drops below the floor."""
+        """Append the events' markets (with tags); False once 24h volume drops below the floor."""
         floor = self.liquidity_floor or 0.0
         for event in events:
             if not isinstance(event, dict):
                 continue
-            if (parse_float(event.get("liquidity")) or 0.0) < floor:
+            if (parse_float(event.get("volume24hr")) or 0.0) < floor:
                 return False
             tags = clean_tags(event.get("tags"))
             parent = [{"slug": event.get("slug")}]
@@ -62,6 +62,7 @@ class PolymarketClient(BaseClient):
         if not external_id or not title:
             return None
         tags = clean_tags(item.get("tags"))
+        volume_24h = parse_float(item.get("volume24hr"))
         return NormalizedMarket(
             source=self.source,
             external_id=str(external_id),
@@ -70,13 +71,16 @@ class PolymarketClient(BaseClient):
             tags=tags,
             price=self._yes_price(item),
             volume=parse_float(item.get("volumeNum", item.get("volume"))),
-            liquidity=parse_float(item.get("liquidityNum", item.get("liquidity"))),
+            liquidity=volume_24h,
+            liquidity_basis=basis_of(volume_24h),
+            depth=parse_float(item.get("liquidityNum", item.get("liquidity"))),
             end_date=parse_datetime(item.get("endDate")),
             url=self._market_url(item),
-            volume_24h=parse_float(item.get("volume24hr")),
+            volume_24h=volume_24h,
             best_bid=parse_float(item.get("bestBid")),
             best_ask=parse_float(item.get("bestAsk")),
             active=self._active(item),
+            description=clean_text(item.get("description")),
         )
 
     @staticmethod

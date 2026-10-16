@@ -87,5 +87,6 @@ def test_indices_lists_stored_rules(client):
             "min_liquidity": 10_000.0,  # requested 100, lifted to the global floor
             "min_price": 0.03,
             "max_price": 0.97,
+            "archived": True,  # rule-based indices are the read-only archive (1015-2157)
         }
     ]

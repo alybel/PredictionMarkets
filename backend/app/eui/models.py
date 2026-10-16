@@ -2,8 +2,12 @@
 
 * ``eui_snapshot_runs`` / ``eui_market_snapshots``: one complete, harmonized
   market state per day (the raw material for later backtests).
-* ``eui_classifications``: per market the LLM's topic decision and polarity,
-  reviewed by a human; reused on every later run and never re-decided.
+* ``eui_classifications``: per market the model's pre-screening (topic, how
+  the market expresses economic uncertainty, price transformation, direction
+  against a reference value), reviewed by a human; reused on every later run
+  and never re-decided.
+* ``eui_reference_values``: current values of key indicators (policy rates,
+  CPI, unemployment) so that range markets can be read as increase or decrease.
 * ``eui_compositions``: the constituent set with weights, fixed per month.
 * ``eui_index_values``: one index value per day plus its per-constituent details.
 * ``eui_events``: event calendar (rate decisions, labour data, geopolitics)
@@ -22,6 +26,12 @@ POLARITY_SYMMETRIC = "symmetric"      # no good/bad side: 1 - 2 * |p - 0.5|
 POLARITY_BAD_IF_YES = "bad_if_yes"    # "Yes" is the bad outcome: contribution = p
 POLARITY_BAD_IF_NO = "bad_if_no"      # "No" is the bad outcome: contribution = 1 - p
 POLARITIES = (POLARITY_SYMMETRIC, POLARITY_BAD_IF_YES, POLARITY_BAD_IF_NO)
+
+DIRECTION_INCREASE = "increase"    # the market's range/threshold lies above the current reference value
+DIRECTION_DECREASE = "decrease"    # ... below the current reference value
+DIRECTION_UNCHANGED = "unchanged"  # the range contains the current value
+DIRECTION_NA = "n/a"               # no numeric range or no reference value available
+DIRECTIONS = (DIRECTION_INCREASE, DIRECTION_DECREASE, DIRECTION_UNCHANGED, DIRECTION_NA)
 
 STATUS_PROPOSED = "proposed"
 STATUS_CONFIRMED = "confirmed"
@@ -83,6 +93,10 @@ class MarketClassification(Base):
     is_economic: Mapped[bool] = mapped_column(Boolean, index=True)
     polarity: Mapped[str] = mapped_column(String(16), default=POLARITY_SYMMETRIC)
     rationale: Mapped[str | None] = mapped_column(String(512))
+    uncertainty_note: Mapped[str | None] = mapped_column(String(512))   # how the market expresses uncertainty
+    direction: Mapped[str] = mapped_column(String(16), default=DIRECTION_NA)
+    reference_indicator: Mapped[str | None] = mapped_column(String(64))
+    reference_value: Mapped[float | None] = mapped_column(Float)
     model: Mapped[str] = mapped_column(String(64))
     status: Mapped[str] = mapped_column(String(16), default=STATUS_PROPOSED, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
@@ -121,3 +135,18 @@ class IndexEvent(Base):
     event_date: Mapped[date] = mapped_column(Date, index=True)
     label: Mapped[str] = mapped_column(String(128))
     kind: Mapped[str] = mapped_column(String(32))  # rates | labour | geopolitical | other
+
+
+class ReferenceValue(Base):
+    """Current value of an indicator, maintained by hand (e.g. fed_funds_upper = 4.5 %)."""
+
+    __tablename__ = "eui_reference_values"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    indicator: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    label: Mapped[str] = mapped_column(String(128))
+    value: Mapped[float | None] = mapped_column(Float)
+    unit: Mapped[str] = mapped_column(String(16), default="%")
+    as_of: Mapped[date | None] = mapped_column(Date)
+    note: Mapped[str | None] = mapped_column(String(256))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)

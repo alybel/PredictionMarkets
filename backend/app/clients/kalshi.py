@@ -5,17 +5,19 @@ inherits its event's category as tag. The endpoint has no sort order and
 no category filter, so paging is capped by ``max_pages``.
 
 Field notes: the API quotes prices, volume and liquidity in dollar fields
-(``*_dollars`` / ``*_fp``); legacy cent fields are still accepted. The
-public API currently reports ``liquidity_dollars`` as 0 for all markets,
-so open interest (contracts x 1 USD notional) serves as liquidity proxy
-whenever the reported liquidity is missing or zero.
+(``*_dollars`` / ``*_fp``); legacy cent fields are still accepted.
+``liquidity`` is the 24h turnover in USD (see below). ``depth`` is the
+reported liquidity; the public API currently reports ``liquidity_dollars``
+as 0 for all markets, so open interest (contracts x 1 USD notional) serves
+as depth proxy whenever the reported liquidity is missing or zero.
 
 ``volume_24h`` is converted from contracts to USD with the current price
 (a contract pays 1 USD, so contracts x price is the dollar turnover);
 ``best_bid``/``best_ask`` come from the yes side in dollars (legacy cents / 100).
+``description`` is the market's primary rules text (``rules_primary``), else its subtitle.
 """
 
-from backend.app.clients.base import BaseClient, NormalizedMarket, clean_tags, parse_datetime, parse_float
+from backend.app.clients.base import BaseClient, NormalizedMarket, basis_of, clean_tags, clean_text, parse_datetime, parse_float
 
 KALSHI_EVENTS_URL = "https://api.elections.kalshi.com/trade-api/v2/events"
 KALSHI_WEB_URL = "https://kalshi.com"
@@ -58,6 +60,7 @@ class KalshiClient(BaseClient):
         if not external_id or not title:
             return None
         tags = clean_tags([item.get("category")])
+        volume_24h = self._volume_24h_usd(item)
         return NormalizedMarket(
             source=self.source,
             external_id=str(external_id),
@@ -66,13 +69,16 @@ class KalshiClient(BaseClient):
             tags=tags,
             price=self._yes_price(item),
             volume=self._first_float(item, "volume_fp", "volume"),
-            liquidity=self._liquidity(item),
+            liquidity=volume_24h,
+            liquidity_basis=basis_of(volume_24h),
+            depth=self._depth(item),
             end_date=parse_datetime(item.get("close_time")),
             url=f"{KALSHI_WEB_URL}/markets/{external_id}",
-            volume_24h=self._volume_24h_usd(item),
+            volume_24h=volume_24h,
             best_bid=self._price_field(item, "yes_bid_dollars", "yes_bid"),
             best_ask=self._price_field(item, "yes_ask_dollars", "yes_ask"),
             active=(item["status"] == "active") if isinstance(item.get("status"), str) else None,
+            description=clean_text(item.get("rules_primary")) or clean_text(item.get("subtitle")),
         )
 
     @classmethod
@@ -110,7 +116,7 @@ class KalshiClient(BaseClient):
         return cents / 100.0 if cents is not None else None
 
     @classmethod
-    def _liquidity(cls, item: dict) -> float | None:
+    def _depth(cls, item: dict) -> float | None:
         """Reported liquidity in USD, else open interest as proxy (see module docstring)."""
         dollars = parse_float(item.get("liquidity_dollars"))
         if dollars is None:

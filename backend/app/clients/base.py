@@ -25,6 +25,13 @@ class NormalizedMarket:
     Order-book fields (``best_bid``/``best_ask`` as 0-1 prices) and
     ``volume_24h`` (USD) feed the Economic Uncertainty Index; ``active``
     is the source's own status flag (None when the source reports none).
+    ``description`` is the source's resolution text / rules, searchable in
+    the Index Manufacture catalog. ``liquidity`` is the 24h turnover in USD
+    (identical to ``volume_24h``; comparable across both sources), so floor,
+    filters, ranking and weights all rest on it; ``liquidity_basis`` is then
+    ``volume_24h`` (see ``backend.app.field_docs``). ``depth`` keeps the
+    source's standing-money figure (Polymarket order-book depth, Kalshi
+    reported liquidity or open interest) for the uncertainty liquidity score.
     """
 
     source: str
@@ -42,6 +49,17 @@ class NormalizedMarket:
     best_bid: float | None = None
     best_ask: float | None = None
     active: bool | None = None
+    description: str | None = None
+    liquidity_basis: str | None = None
+    depth: float | None = None
+
+
+LIQUIDITY_BASIS_VOLUME_24H = "volume_24h"
+
+
+def basis_of(volume_24h: float | None) -> str | None:
+    """Basis tag of the liquidity figure: 24h turnover when known, else None."""
+    return LIQUIDITY_BASIS_VOLUME_24H if volume_24h is not None else None
 
 
 def parse_datetime(value) -> datetime | None:
@@ -62,6 +80,13 @@ def parse_float(value) -> float | None:
         return float(value)
     except (TypeError, ValueError):
         return None
+
+
+def clean_text(value, limit: int = 2000) -> str | None:
+    """Trimmed free text capped at ``limit`` characters; None when missing or empty."""
+    if not isinstance(value, str) or not value.strip():
+        return None
+    return value.strip()[:limit]
 
 
 def clean_tags(values) -> list[str]:
@@ -122,7 +147,7 @@ class BaseClient:
             market = self._safe_normalize(item)
             if market is not None and (market.liquidity or 0.0) >= floor:
                 markets.append(market)
-        logger.info("%s: fetched %d markets (floor %.0f USD)", self.source, len(markets), floor)
+        logger.info("%s: fetched %d markets (floor %.0f USD 24h volume)", self.source, len(markets), floor)
         return markets
 
     def normalize(self, item) -> NormalizedMarket | None:

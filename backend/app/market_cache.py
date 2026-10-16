@@ -28,6 +28,13 @@ class MarketCache:
                 self._loaded_at = self._clock()
             return self._markets
 
+    def peek(self) -> tuple[list | None, float | None]:
+        """Cached markets and their age in seconds without triggering a fetch (``None`` when empty)."""
+        with self._lock:
+            if self._markets is None or self._loaded_at is None:
+                return None, None
+            return self._markets, self._clock() - self._loaded_at
+
     def _expired(self) -> bool:
         return self._loaded_at is None or self._clock() - self._loaded_at >= self._ttl
 

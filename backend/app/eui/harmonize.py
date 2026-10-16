@@ -73,7 +73,7 @@ def exclusion_reason(price, end_date, active, now: datetime | None = None) -> st
 def harmonize(market, now: datetime | None = None) -> HarmonizedMarket:
     """Derive spread, score and eligibility from a NormalizedMarket."""
     spread = spread_of(market.best_bid, market.best_ask)
-    depth = market.liquidity or 0.0
+    depth = getattr(market, "depth", None) or 0.0
     volume_24h = market.volume_24h or 0.0
     reason = exclusion_reason(market.price, market.end_date, market.active, now)
     return HarmonizedMarket(

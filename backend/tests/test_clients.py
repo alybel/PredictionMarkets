@@ -40,7 +40,7 @@ class FakeSession:
 
 def poly_events(markets: list, **event) -> list:
     """Gamma /events page: one liquid event wrapping the given markets."""
-    return [{"liquidity": "40000", "slug": "x-event", "tags": [{"label": "Politics"}, {"label": "Elections"}],
+    return [{"liquidity": "40000", "volume24hr": "40000", "slug": "x-event", "tags": [{"label": "Politics"}, {"label": "Elections"}],
              "markets": markets, **event}]
 
 
@@ -57,7 +57,9 @@ POLYMARKET_PAYLOAD = poly_events(
             "outcomePrices": '["0.62", "0.38"]',
             "volumeNum": 150000.5,
             "liquidityNum": 32000.0,
+            "volume24hr": 25000.0,
             "endDate": "2028-11-07T12:00:00Z",
+            "description": "Resolves Yes if X is declared the winner.",
         },
         {"id": "999", "question": None},  # malformed: no title -> skipped
     ]
@@ -71,6 +73,7 @@ KALSHI_PAYLOAD = kalshi_events(
             "last_price_dollars": "0.6200",
             "volume_fp": "88000.00",
             "liquidity_dollars": "45000.0000",
+            "volume_24h_fp": "50000.00",
             "close_time": "2026-12-31T23:00:00Z",
         },
         {"title": "no ticker"},  # malformed -> skipped
@@ -98,9 +101,21 @@ def test_polymarket_normalization():
     assert market.tags == ["Politics", "Elections"]
     assert market.price == pytest.approx(0.62)
     assert market.volume == pytest.approx(150000.5)
-    assert market.liquidity == pytest.approx(32000.0)
+    assert market.liquidity == market.volume_24h == pytest.approx(25000.0)  # liquidity = 24h volume
+    assert market.liquidity_basis == "volume_24h"
+    assert market.depth == pytest.approx(32000.0)  # order-book depth kept for the EUI score
     assert market.end_date == datetime(2028, 11, 7, 12, 0, tzinfo=timezone.utc)
     assert market.fetched_at is not None
+    assert market.description == "Resolves Yes if X is declared the winner."
+
+
+def test_kalshi_description_prefers_rules_text_over_subtitle():
+    item = {"ticker": "T", "title": "Q?", "last_price_dollars": 0.5, "volume_24h_fp": 40000, "subtitle": "Sub", "rules_primary": "  Rules text  "}
+    (market,) = KalshiClient(session=FakeSession(kalshi_events([item]))).fetch_markets()
+    assert market.description == "Rules text"
+    item.pop("rules_primary")
+    (market,) = KalshiClient(session=FakeSession(kalshi_events([item]))).fetch_markets()
+    assert market.description == "Sub"
 
 
 def test_kalshi_normalization_uses_dollar_fields():
@@ -111,15 +126,18 @@ def test_kalshi_normalization_uses_dollar_fields():
     assert market.tags == ["Economics"]
     assert market.price == pytest.approx(0.62)
     assert market.volume == pytest.approx(88000)
-    assert market.liquidity == pytest.approx(45000.0)
+    assert market.liquidity == market.volume_24h == pytest.approx(50000 * 0.62)  # contracts x price
+    assert market.liquidity_basis == "volume_24h"
+    assert market.depth == pytest.approx(45000.0)
     assert market.end_date == datetime(2026, 12, 31, 23, 0, tzinfo=timezone.utc)
 
 
 def test_kalshi_legacy_cent_fields_are_normalized():
-    item = {"ticker": "T", "title": "Q?", "last_price": 62, "volume": 88000, "liquidity": 4500000}
+    item = {"ticker": "T", "title": "Q?", "last_price": 62, "volume": 88000, "volume_24h": 30000, "liquidity": 4500000}
     (market,) = KalshiClient(session=FakeSession(kalshi_events([item]))).fetch_markets()
     assert market.price == pytest.approx(0.62)  # 62 cents -> 0.62
-    assert market.liquidity == pytest.approx(45000.0)  # cents -> dollars
+    assert market.liquidity == pytest.approx(30000 * 0.62)  # 24h contracts x price
+    assert market.depth == pytest.approx(45000.0)  # cents -> dollars
 
 
 @pytest.mark.parametrize(
@@ -153,6 +171,6 @@ def test_missing_numeric_fields_become_none():
 
 
 def test_malformed_end_date_becomes_none():
-    payload = poly_events([{"id": "1", "question": "Q?", "endDate": "not-a-date", "liquidityNum": 20000}])
+    payload = poly_events([{"id": "1", "question": "Q?", "endDate": "not-a-date", "volume24hr": 20000}])
     (market,) = PolymarketClient(session=FakeSession(payload)).fetch_markets()
     assert market.end_date is None

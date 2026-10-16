@@ -1,6 +1,6 @@
 """Snapshot persistence, monthly composition, daily value and the full daily run - no network."""
 
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 
 import pytest
 from sqlalchemy import select
@@ -17,7 +17,7 @@ from backend.app.eui.models import (
     SnapshotRun,
 )
 from backend.app.eui.snapshot import snapshot_rows, take_snapshot
-from backend.tests.eui_helpers import FakeClient, days_ago, market, memory_session
+from backend.tests.eui_helpers import FakeClient, market, memory_session
 
 DAY1 = date(2026, 9, 22)
 DAY2 = date(2026, 9, 23)
@@ -31,7 +31,7 @@ ECON = [
 ]
 NOISE = [
     market(external_id="nba", title="Who wins the NBA finals?", tags=["Sports"], liquidity=500_000.0),
-    market(external_id="old", title="Will GDP growth exceed 3%?", end_date=days_ago(1)),
+    market(external_id="old", title="Will GDP growth exceed 3%?", end_date=NOW - timedelta(days=1)),
     market(external_id="decided", title="Will the Fed hike rates?", price=0.99),
 ]
 KALSHI = [market(source="kalshi", external_id="FED-DEC", title="Fed cuts rates December 2026?", price=0.40, liquidity=0.0, volume_24h=10_000.0)]
@@ -118,7 +118,7 @@ def test_compute_index_value_polarity_dropouts_and_review():
     assert value.value == pytest.approx(expected) and 0 <= value.value <= 100
 
     # Next day: the recession market ended, so it drops out and the weights renormalize.
-    ended = [market(external_id="rec", title="Will the US enter a recession in 2026?", end_date=days_ago(1))]
+    ended = [market(external_id="rec", title="Will the US enter a recession in 2026?", end_date=NOW - timedelta(days=1))]
     take_snapshot(session, clients=[FakeClient("polymarket", ECON[:1] + ended + ECON[2:]), FakeClient("kalshi", KALSHI)], snapshot_date=DAY2, now=NOW)
     day2 = compute_index(session, DAY2)
     assert day2.constituent_count == 2 and sum(d["weight"] for d in day2.details) == pytest.approx(1.0)

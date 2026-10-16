@@ -35,12 +35,12 @@ class PagedSession:
         return FakeResponse(self._pages.pop(0) if self._pages else None)
 
 
-def poly_event(liquidity: float, *markets: dict, tags=("Politics",), slug="ev") -> dict:
-    return {"liquidity": str(liquidity), "slug": slug, "tags": [{"label": t} for t in tags], "markets": list(markets)}
+def poly_event(volume_24h: float, *markets: dict, tags=("Politics",), slug="ev") -> dict:
+    return {"volume24hr": str(volume_24h), "slug": slug, "tags": [{"label": t} for t in tags], "markets": list(markets)}
 
 
-def poly_market(id_: str, liquidity: float, question: str = "Will X happen?") -> dict:
-    return {"id": id_, "question": question, "liquidityNum": liquidity, "slug": f"m-{id_}"}
+def poly_market(id_: str, volume_24h: float, question: str = "Will X happen?") -> dict:
+    return {"id": id_, "question": question, "volume24hr": volume_24h, "liquidityNum": 1.0, "slug": f"m-{id_}"}
 
 
 def kalshi_market(ticker: str, **fields) -> dict:
@@ -62,7 +62,7 @@ def rule(**overrides) -> IndexRule:
     return IndexRule(**defaults)
 
 
-# --- Polymarket: pagination by liquidity, stop below the floor -------------
+# --- Polymarket: pagination by 24h volume (= liquidity), stop below the floor
 
 
 def test_polymarket_pages_until_liquidity_drops_below_floor(monkeypatch):
@@ -76,7 +76,7 @@ def test_polymarket_pages_until_liquidity_drops_below_floor(monkeypatch):
 
     assert [m.external_id for m in markets] == ["a", "c", "d"]  # b: below floor, e: event below floor
     assert [c["offset"] for c in session.calls] == [0, 2]
-    assert all(c["order"] == "liquidity" and c["ascending"] == "false" for c in session.calls)
+    assert all(c["order"] == "volume24hr" and c["ascending"] == "false" for c in session.calls)
 
 
 def test_polymarket_stops_on_short_page_and_caps_pages(monkeypatch):
@@ -105,8 +105,8 @@ def test_polymarket_markets_inherit_event_tags():
 
 def test_kalshi_follows_cursor_and_tags_by_event_category():
     session = PagedSession([
-        {"events": [{"category": "Politics", "markets": [kalshi_market("P1", liquidity_dollars="12000")]}], "cursor": "c2"},
-        {"events": [{"category": "Economics", "markets": [kalshi_market("E1", liquidity_dollars="30000")]}], "cursor": ""},
+        {"events": [{"category": "Politics", "markets": [kalshi_market("P1", volume_24h_fp="24000", last_price_dollars="0.5")]}], "cursor": "c2"},
+        {"events": [{"category": "Economics", "markets": [kalshi_market("E1", volume_24h_fp="60000", last_price_dollars="0.5")]}], "cursor": ""},
     ])
     markets = kalshi.KalshiClient(session=session).fetch_markets()
 
@@ -117,25 +117,25 @@ def test_kalshi_follows_cursor_and_tags_by_event_category():
 
 
 def test_kalshi_page_cap_limits_requests():
-    endless = PagedSession([{"events": [{"category": "World", "markets": [kalshi_market("W", liquidity_dollars="20000")]}], "cursor": "more"}] * 30)
+    endless = PagedSession([{"events": [{"category": "World", "markets": [kalshi_market("W", volume_24h_fp="40000", last_price_dollars="0.5")]}], "cursor": "more"}] * 30)
     client = kalshi.KalshiClient(session=endless)
     client.max_pages = 4
     assert len(client.fetch_markets()) == 4
     assert len(endless.calls) == 4
 
 
-def test_kalshi_liquidity_falls_back_to_open_interest():
+def test_kalshi_floor_applies_to_24h_volume_and_depth_falls_back_to_open_interest():
     session = PagedSession([{"events": [{"category": "Economics", "markets": [
-        kalshi_market("OI", liquidity_dollars="0.0000", open_interest_fp="25000.50", last_price_dollars="0.3100"),
-        kalshi_market("LOW", liquidity_dollars="0.0000", open_interest_fp="100.00"),
-        kalshi_market("REP", liquidity_dollars="15000.0000", open_interest_fp="1.00"),
+        kalshi_market("OI", liquidity_dollars="0.0000", open_interest_fp="25000.50", volume_24h_fp="50000", last_price_dollars="0.3100"),
+        kalshi_market("LOW", liquidity_dollars="90000.0000", volume_24h_fp="100", last_price_dollars="0.5000"),
+        kalshi_market("REP", liquidity_dollars="15000.0000", open_interest_fp="1.00", volume_24h_fp="40000", last_price_dollars="0.5000"),
     ]}]}])
     markets = {m.external_id: m for m in kalshi.KalshiClient(session=session).fetch_markets()}
 
-    assert set(markets) == {"OI", "REP"}
-    assert markets["OI"].liquidity == pytest.approx(25_000.5)
-    assert markets["OI"].price == pytest.approx(0.31)
-    assert markets["REP"].liquidity == pytest.approx(15_000.0)  # reported liquidity wins
+    assert set(markets) == {"OI", "REP"}  # LOW: deep book but only 50 USD traded in 24h
+    assert markets["OI"].liquidity == pytest.approx(50_000 * 0.31)
+    assert markets["OI"].depth == pytest.approx(25_000.5)
+    assert markets["REP"].depth == pytest.approx(15_000.0)  # reported liquidity wins
 
 
 # --- rule engine: tags, keywords, floor, funnel -----------------------------
@@ -230,8 +230,21 @@ def test_api_returns_funnel_and_tags_and_uses_cache(client):
 
 
 def test_dashboard_shows_funnel_tags_and_forced_refresh(client):
-    html = client[0].get("/").text
+    html = client[0].get("/").text + client[0].get("/static/indices.js").text
     assert 'id="funnel"' in html and "renderFunnel(data.funnel)" in html
     assert "nach Preis-Korridor" in html and "nach Enddatum" in html
     assert "marketTags(m).join" in html  # tags rendered in the category column
     assert '"?refresh=1"' in html  # refresh button bypasses the server cache
+
+
+def test_cache_peek_never_fetches():
+    clock = {"t": 0.0}
+    calls = []
+    cache = MarketCache(lambda: calls.append(1) or ["m"], ttl_seconds=60.0, clock=lambda: clock["t"])
+
+    assert cache.peek() == (None, None)
+    assert calls == []
+    cache.get()
+    clock["t"] = 12.0
+    assert cache.peek() == (["m"], 12.0)
+    assert len(calls) == 1

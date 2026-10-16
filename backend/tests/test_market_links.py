@@ -18,7 +18,7 @@ from backend.tests.test_clients import FakeSession, kalshi_events, poly_events
 
 
 def polymarket_item(**overrides) -> dict:
-    item = {"id": "1", "question": "Will X happen?", "slug": "will-x-happen", "liquidityNum": 20000}
+    item = {"id": "1", "question": "Will X happen?", "slug": "will-x-happen", "volume24hr": 20000}
     item.update(overrides)
     return item
 
@@ -42,7 +42,7 @@ def test_polymarket_url_none_without_slug(event_slug):
 
 
 def test_kalshi_url_from_ticker():
-    payload = kalshi_events([{"ticker": "FED-25DEC", "title": "Fed cuts rates?", "liquidity_dollars": "20000"}])
+    payload = kalshi_events([{"ticker": "FED-25DEC", "title": "Fed cuts rates?", "last_price_dollars": "0.5", "volume_24h_fp": "40000"}])
     (market,) = KalshiClient(session=FakeSession(payload)).fetch_markets()
     assert market.url == "https://kalshi.com/markets/FED-25DEC"
 
@@ -82,7 +82,7 @@ def test_api_delivers_market_url(client):
 
 
 def test_dashboard_links_market_titles(client):
-    html = client.get("/").text
+    html = client.get("/").text + client.get("/static/indices.js").text
     assert "marketTitle(m)" in html  # title cell renders the market link
     assert "m.url" in html
     assert 'rel = "noopener noreferrer"' in html

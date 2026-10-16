@@ -8,330 +8,366 @@
 </head>
 <body>
 <main>
-  <h1>PredictionMarketIndex</h1>
-  <p class="subtitle">Index wählen — Marktdaten werden on-demand von Polymarket und Kalshi abgerufen.</p>
+  <header class="topbar">
+    <div>
+      <h1>PredictionMarketIndex</h1>
+      <p class="subtitle">Index-Builder für Prognosemärkte · Polymarket + Kalshi → Regelwerk → Index → Wertentwicklung</p>
+    </div>
+    <div id="health" class="health"><span class="dot down"></span> Backend wird geprüft …</div>
+  </header>
 
-  <section id="eui" class="card">
-    <div class="eui-head">
-      <div>
-        <h2>Economic Uncertainty Index</h2>
-        <p class="hint">Täglich berechnet. Misst, wie uneinig der Markt über wirtschaftlich relevante Ereignisse ist (0 = Konsens, 100 = maximale Uneinigkeit). Quelle: Polymarket und Kalshi.</p>
+  <div id="banner" class="banner error hidden"></div>
+
+  <nav class="tabs" aria-label="Ansichten">
+    <button type="button" class="tab" data-view="indices">Index-Builder</button>
+    <button type="button" class="tab" data-view="quality">Datenqualität</button>
+    <button type="button" class="tab" data-view="metrics">Metriken</button>
+  </nav>
+
+  <!-- ===== Index builder: value, history, constituents | rules on the right ===== -->
+  <section data-view-panel="indices" class="hidden">
+    <div class="index-bar">
+      <div id="index-buttons"></div>
+      <button id="new-index" type="button" class="ghost">+ Neuer Index</button>
+    </div>
+    <div id="new-index-form" class="card hidden">
+      <div class="row">
+        <input id="new-index-name" type="text" placeholder="Name des neuen Index" maxlength="128">
+        <button id="create-index" type="button">Anlegen</button>
+        <button id="cancel-new-index" type="button" class="ghost">Abbrechen</button>
       </div>
-      <button id="eui-run" type="button">Tageslauf jetzt starten</button>
+      <p class="hint">Zur Auswahl stehen nur validierte Metriken (Tab „Metriken“). Unterschiedliche Einheiten (bp, Wahrscheinlichkeit) werden standardisiert (z-Wert) und gewichtet gemittelt.</p>
+      <label class="field inline"><span>Mindest-Liquidität (USD, Ø 24h-Umsatz der letzten 30 Tage)</span><input id="mi-minliq" type="number" min="0" step="1000" value="0" list="liq-presets" title="Übliche Werte zur Auswahl oder eigener Betrag"></label>
+      <p id="mi-liqmedian" class="hint"></p>
+      <div id="mi-choices" class="mi-choices"></div>
+      <p id="new-index-error" class="error-text hidden"></p>
     </div>
-    <div class="value-row">
-      <span class="big" id="eui-value">–</span>
-      <span class="kpi"><strong id="eui-date">–</strong>Stichtag</span>
-      <span class="kpi"><strong id="eui-count">–</strong>Bestandteile</span>
-      <span class="kpi"><strong id="eui-as-of">–</strong>Berechnet</span>
-    </div>
-    <svg id="eui-chart" viewBox="0 0 600 120" preserveAspectRatio="none" role="img" aria-label="Verlauf des Index"></svg>
-    <p id="eui-status" class="hint"></p>
-    <details class="eui-admin">
-      <summary>Prüfung der Zuordnung <span id="eui-pending" class="badge hidden"></span></summary>
-      <p class="hint">Das Sprachmodell schlägt Thema und Polung vor; bestätigen oder ablehnen Sie hier. Änderungen wirken sofort auf die nächste Berechnung.</p>
-      <table>
-        <thead><tr><th>Quelle</th><th>Markt</th><th>Polung</th><th>Begründung</th><th></th></tr></thead>
-        <tbody id="eui-proposals"></tbody>
-      </table>
-      <p id="eui-proposals-empty" class="hint hidden">Keine offenen Vorschläge.</p>
-    </details>
-    <details class="eui-admin">
-      <summary>Bestandteile und Plausibilität</summary>
-      <p id="eui-plausibility" class="hint"></p>
-      <table>
-        <thead><tr><th>Bestandteil</th><th class="num">Preis</th><th>Polung</th><th class="num">Beitrag</th><th class="num">Gewicht</th></tr></thead>
-        <tbody id="eui-constituents"></tbody>
-      </table>
-    </details>
+    <p id="status">Lade Indizes …</p>
+
+    <section id="mi-result" class="card hidden">
+      <div class="card-head">
+        <div><h2 id="mi-title">Index</h2>
+          <p class="hint">Index aus validierten Metriken: je Metrik ein z-Wert nur aus ihren Werten bis zum jeweiligen Tag (kein Lookahead), dann gewichtet gemittelt. 0 = üblicher Stand, +1 = eine Standardabweichung darüber.</p></div>
+        <div class="controls"><span id="mi-range" class="controls" title="Zeitraum für Indexverlauf und Aktien-Auswertung"><button type="button" class="ghost" data-days="90">90 T</button><button type="button" class="ghost" data-days="365">1 J</button><button type="button" class="ghost" data-days="1095">3 J</button><button type="button" class="ghost" data-days="1825">5 J</button></span>
+          <button id="mi-edit" type="button" class="ghost">Zusammensetzung bearbeiten</button>
+          <button id="mi-delete" type="button" class="ghost danger">Löschen</button></div>
+      </div>
+      <p id="mi-warning" class="mi-warning hidden" role="alert"></p>
+      <div class="kpis">
+        <span class="kpi big"><strong id="mi-last">–</strong>Indexwert (z)</span>
+        <span class="kpi"><strong id="mi-change">–</strong>Veränderung</span>
+        <span class="kpi"><strong id="mi-span">–</strong>Spanne (min – max)</span>
+        <span class="kpi"><strong id="mi-days">–</strong>Tage</span>
+      </div>
+      <div id="mi-chart"></div>
+      <p id="mi-caption" class="hint"></p>
+      <div class="table-scroll"><table><thead><tr><th>Metrik</th><th>Einheit</th><th class="num">Gewicht</th><th>Status</th><th class="num">Letzter Wert</th><th class="num">z-Wert</th></tr></thead>
+        <tbody id="mi-components"></tbody></table></div>
+    </section>
+    <div id="mi-cr-slot"></div>
+
+    <section id="result" class="hidden ib-grid">
+      <div class="ib-main">
+        <div class="card">
+          <div class="card-head">
+            <h2><span id="result-title">Index</span> <span class="badge">Archiv</span></h2>
+            <div class="controls">
+              <select id="source-filter"><option value="">Alle Quellen</option></select>
+              <button id="refresh" type="button" title="Marktdaten neu von den Quellen abrufen">↻ Aktualisieren</button>
+              <button id="delete-archive-index" type="button" class="ghost danger" title="Archiv-Index endgültig löschen">Löschen</button>
+            </div>
+          </div>
+          <div class="kpis">
+            <span class="kpi big"><strong id="value">–</strong>Indexwert</span>
+            <span class="kpi"><strong id="method">–</strong>Methode</span>
+            <a id="kpi-constituents" class="kpi kpi-link" href="#constituents-card" title="Zur Liste der Bestandteile springen"><strong id="market-count">–</strong>Bestandteile ↓</a>
+            <span class="kpi"><strong id="total-liquidity">–</strong>Liquidität ($)</span>
+            <span class="kpi"><strong id="total-volume">–</strong>Volumen ($)</span>
+            <span class="kpi"><strong id="as-of">–</strong>Stand</span>
+          </div>
+          <p id="funnel" class="hidden"></p>
+        </div>
+
+        <div id="constituents-card" class="card">
+          <div class="card-head">
+            <div>
+              <h2>Bestandteile (<span id="visible-count">0</span>)</h2>
+              <p id="constituents-summary" class="hint"></p>
+            </div>
+            <div id="toolbar"><input id="market-filter" type="search" placeholder="Märkte filtern (Titel/Tags) …"></div>
+          </div>
+          <div class="table-scroll constituents-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th class="num" data-key="rank" title="Rang nach Gewicht im Index">#<span class="arrow"></span></th>
+                  <th data-key="source">Quelle <span class="arrow"></span></th>
+                  <th data-key="title">Markt <span class="arrow"></span></th>
+                  <th data-key="category" class="optional">Kategorie <span class="arrow"></span></th>
+                  <th class="num" data-key="price" data-doc="price">Preis <span class="arrow"></span></th>
+                  <th class="num" data-key="volume" data-doc="volume">Volumen ($) <span class="arrow"></span></th>
+                  <th class="num" data-key="liquidity" data-doc="liquidity">Liquidität ($) <span class="arrow"></span></th>
+                  <th class="num" data-key="weight">Gewicht <span class="arrow"></span></th>
+                </tr>
+              </thead>
+              <tbody id="markets"></tbody>
+            </table>
+          </div>
+          <p id="empty-note" class="empty hidden">Kein Markt entspricht dem Filter.</p>
+          <details id="dash-field-docs" class="field-docs-panel" data-field-docs></details>
+        </div>
+
+        <div class="card">
+          <div class="card-head">
+            <div>
+              <h2>Wertentwicklung</h2>
+              <p class="hint">Das Regelwerk wird auf jeden gespeicherten Tages-Snapshot aller Märkte angewendet (Backtest). „Historie nachladen“ holt die Tageskurse der heutigen Index-Märkte von Polymarket und Kalshi für die Zeit vor dem ersten Snapshot.</p>
+            </div>
+            <div id="ib-range" class="controls"><button type="button" class="ghost" data-days="30">30 T</button><button type="button" class="ghost" data-days="90">90 T</button><button type="button" class="ghost" data-days="365">1 J</button><button type="button" id="ib-backfill" class="ghost" title="Tageskurse der Index-Märkte bei Polymarket und Kalshi abrufen und als vergangene Tages-Snapshots speichern">↻ Historie nachladen</button></div>
+          </div>
+          <div class="kpis">
+            <span class="kpi"><strong id="ib-first">–</strong>Start</span>
+            <span class="kpi"><strong id="ib-last">–</strong>Zuletzt</span>
+            <span class="kpi"><strong id="ib-change">–</strong>Veränderung</span>
+            <span class="kpi"><strong id="ib-span">–</strong>Spanne (min – max)</span>
+          </div>
+          <svg id="ib-chart" viewBox="0 0 600 160" preserveAspectRatio="none" role="img" aria-label="Historische Wertentwicklung des Index"></svg>
+          <p id="ib-caption" class="hint"></p>
+        </div>
+
+        <div id="cr-card" class="card">
+          <div class="card-head">
+            <div>
+              <h2>Aktien-Korrelation (Top 100 US)</h2>
+              <p class="hint">Sagt eine Index-Veränderung die Rendite am nächsten Handelstag voraus? Index-Veränderung des Snapshot-Tages T gegen die Rendite Schlusskurs T → nächster Schlusskurs, je Aktie. Zeitraum wie bei der Wertentwicklung. Klick auf eine Aktie zeigt Performance, Renditeverläufe und Trades.</p>
+            </div>
+            <div class="controls">
+              <label class="hint metric-only" for="cr-target" title="Überrendite = Aktienrendite minus gleichgewichteter Ø der Top 100; der Gesamtmarkt selbst immer mit roher Rendite">Zielgröße</label><select id="cr-target" class="metric-only"><option value="excess">Überrendite ggü. Markt</option><option value="raw">rohe Rendite</option></select>
+              <label class="hint" for="cr-min-change">Ereignis ab</label>
+              <select id="cr-min-change"><option value="0">jeder Veränderung</option><option value="0.005">±0,5 Pkt.</option><option value="0.01">±1 Pkt.</option><option value="0.02">±2 Pkt.</option></select>
+              <label class="hint" for="cr-min-stock-move" title="Rendite am Folgetag, die ein Signal in der erwarteten Richtung überschreiten muss, um als Treffer zu zählen">Mindest-Aktienbewegung</label>
+              <select id="cr-min-stock-move"><option value="0.0025">0,25 %</option><option value="0.005">0,5 %</option><option value="0.01">1 %</option><option value="0.02">2 %</option><option value="0.03">3 %</option></select>
+              <label class="hint"><input id="cr-only-significant" type="checkbox"> nur signifikante</label>
+              <button id="cr-refresh-prices" type="button" class="ghost" title="Fehlende Schlusskurse von Yahoo Finance nachladen">↻ Kurse laden</button>
+            </div>
+          </div>
+          <div class="kpis">
+            <span class="kpi"><strong id="cr-days">–</strong>Index-Tage</span>
+            <span class="kpi"><strong id="cr-tested">–</strong>Aktien getestet</span>
+            <span class="kpi"><strong id="cr-significant">–</strong>signifikant (p &lt; 5 %)</span>
+            <span class="kpi"><strong id="cr-expected">–</strong>davon zufällig erwartet</span>
+            <span class="kpi"><strong id="cr-prices">–</strong>Kursdaten</span>
+            <span class="kpi metric-only"><strong id="cr-reg-significant">–</strong>F-Test signifikant</span><span class="kpi metric-only"><strong id="cr-reg-expected">–</strong>davon zufällig erwartet</span>
+          </div>
+          <p id="cr-mc-warning" class="mi-warning hidden" role="alert"></p>
+          <div class="table-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th data-cr-sort="ticker">Aktie <span class="arrow"></span></th>
+                  <th class="num" data-cr-sort="n" title="Anzahl Paare (Index-Veränderung, Rendite am Folgetag)">n <span class="arrow"></span></th>
+                  <th class="num" data-cr-sort="correlation" title="Pearson-Korrelation Index-Veränderung ↔ Rendite am Folgetag">Korrelation <span class="arrow"></span></th>
+                  <th class="num" data-cr-sort="p_value" title="Wahrscheinlichkeit, dass die Korrelation nur Zufall ist (zweiseitig)">p-Wert <span class="arrow"></span></th>
+                  <th class="num" data-cr-sort="hit_rate" title="Anteil der Ereignisse, in denen die Aktie in Richtung der Index-Veränderung lief">Trefferquote <span class="arrow"></span></th>
+                  <th class="num" data-cr-sort="mean_return_after_up" title="Durchschnittliche Rendite am Folgetag nach einem Index-Anstieg">Ø nach Anstieg <span class="arrow"></span></th>
+                  <th class="num" data-cr-sort="mean_return_after_down" title="Durchschnittliche Rendite am Folgetag nach einem Index-Rückgang">Ø nach Rückgang <span class="arrow"></span></th>
+                  <th class="num" data-cr-sort="slope_per_point" title="Rendite am Folgetag je 1 Indexpunkt Veränderung"><span id="cr-slope-label">Beta je Pkt.</span> <span class="arrow"></span></th><th class="num sig-col metric-only" data-cr-sort="r2" title="Einfache Regression ΔIndex (z) → Rendite: erklärter Anteil der Schwankung">R² einfach <span class="arrow"></span></th><th class="num metric-only" data-cr-sort="multi_r2" title="Mehrfache Regression: Tagesänderung jeder Metrik als eigener Regressor">R² mehrfach <span class="arrow"></span></th><th id="cr-f-head" class="num metric-only" data-cr-sort="multi_f_p" title="F-Test der mehrfachen Regression: sind alle Koeffizienten zusammen 0?">F-Test p <span class="arrow"></span></th>
+                  <th class="num sig-col" data-cr-sort="signals" title="Signale im Testteil (zweite Hälfte): Tage mit Index-Veränderung über der Mindest-Veränderung">Signale <span class="arrow"></span></th>
+                  <th class="num" data-cr-sort="precision" title="Treffer ÷ Signale im Testteil: Aktie bewegt sich am Folgetag über die Mindest-Aktienbewegung in die erwartete Richtung (Richtung nur aus der ersten Hälfte bestimmt)">Precision <span class="arrow"></span></th>
+                  <th class="num" data-cr-sort="base_rate" title="Anteil aller Testtage, an denen die Aktie ohnehin über der Schwelle in die jeweils erwartete Richtung ging">Basisrate <span class="arrow"></span></th>
+                  <th class="num" data-cr-sort="lift" title="Precision ÷ Basisrate: über 1 = besser als Zufall">Lift <span class="arrow"></span></th>
+                  <th class="num" data-cr-sort="p_signal" title="Einseitiger Binomialtest der Treffer gegen die Basisrate">p (Signal) <span class="arrow"></span></th>
+                </tr>
+              </thead>
+              <tbody id="cr-rows"></tbody>
+            </table>
+          </div>
+          <p id="cr-caption" class="hint"></p>
+          <div id="cr-detail" class="detail hidden">
+            <div class="card-head">
+              <h3 id="cr-detail-title"></h3>
+              <button id="cr-detail-close" type="button" class="ghost" title="Detailansicht schließen">✕ Schließen</button>
+            </div>
+            <div class="kpis">
+              <span class="kpi"><strong id="cr-t-strategy">–</strong>Strategie</span>
+              <span class="kpi"><strong id="cr-t-buyhold">–</strong>Buy &amp; Hold</span>
+              <span class="kpi"><strong id="cr-t-count">–</strong>Trades</span>
+              <span class="kpi"><strong id="cr-t-win">–</strong>Gewinn-Trades</span>
+              <span class="kpi"><strong id="cr-t-direction">–</strong>Richtung</span>
+            </div>
+            <h4>Performance <span class="legend"><i class="sw strategy"></i>Strategie <i class="sw buyhold"></i>Buy &amp; Hold <i class="sw win"></i>Gewinn-Trade <i class="sw loss"></i>Verlust-Trade</span></h4>
+            <svg id="cr-perf" class="tchart" viewBox="0 0 600 180" role="img" aria-label="Kumulierte Performance der Strategie gegen Buy &amp; Hold mit markierten Trades"></svg>
+            <h4>Renditeverläufe <span class="legend"><i class="sw signal"></i>Index-Veränderung Tag T <i class="sw stock"></i>Aktienrendite Folgetag (je eigene Skala)</span></h4>
+            <svg id="cr-returns" class="tchart" viewBox="0 0 600 180" role="img" aria-label="Index-Veränderung und Aktienrendite am Folgetag überlagert"></svg>
+            <h4>Robustheit der Signal-Precision <span class="legend">Testteil (zweite Hälfte) · Precision (Signale)</span></h4>
+            <div class="table-scroll">
+              <table class="robust">
+                <thead><tr><th>Index-Schwelle ↓ / Aktien-Schwelle →</th><th class="num">0,5 %</th><th class="num">1 %</th><th class="num">2 %</th></tr></thead>
+                <tbody id="cr-robust-rows"></tbody>
+              </table>
+            </div>
+            <p id="cr-robust-caption" class="hint"></p>
+            <div id="cr-reg-block" class="metric-only"><h4>Regression <span class="legend">einfach (Gesamtindex in z) und mehrfach (jede Metrik in Roheinheit) nebeneinander</span></h4><div class="reg-grid"><div id="cr-reg-simple" class="table-scroll"></div><div id="cr-reg-multiple" class="table-scroll"></div></div><p id="cr-reg-caption" class="hint"></p></div>
+            <div class="archive-only">
+            <h4>Beitrag je Komponente <span class="legend">Anteil an Korrelation und Beta, getrennt nach Preis- und Gewichtseffekt</span></h4>
+            <div class="table-scroll attr-scroll">
+              <table class="attr">
+                <thead>
+                  <tr><th rowspan="2">Markt</th><th class="num" rowspan="2" title="Index-Tage der Auswertung, an denen der Markt im Index war">Tage im Index</th><th class="num" rowspan="2" title="Durchschnittliches Gewicht (24h-Umsatz-Anteil) an diesen Tagen">Ø Gewicht</th>
+                    <th class="num sig-col" colspan="3">Anteil an der Korrelation</th><th class="num sig-col" colspan="3">Anteil am Beta (Rendite je Index-Punkt)</th>
+                    <th class="num sig-col" rowspan="2" title="Korrelation des eigenen Beitrags mit der Folgetagsrendite (ab 10 Tagen)">Eigene Korr.</th></tr>
+                  <tr><th class="num sig-col" title="Gewicht gestern × Preisänderung">Preis</th><th class="num" title="Gewichtsänderung × Preis heute (Umschichtung, Ein- und Austritte)">Gewicht</th><th class="num">Gesamt</th>
+                    <th class="num sig-col">Preis</th><th class="num">Gewicht</th><th class="num">Gesamt</th></tr>
+                </thead>
+                <tbody id="cr-attr-rows"></tbody>
+              </table>
+            </div>
+            <p id="cr-attr-caption" class="hint"></p></div>
+            <div class="table-scroll trades-scroll">
+              <table>
+                <thead><tr><th>Signal (T)</th><th class="num">Index-Δ</th><th>Position</th><th>Ausstieg</th><th class="num">Rendite Folgetag</th><th class="num">Trade</th><th class="num">Strategie kum.</th></tr></thead>
+                <tbody id="cr-trade-rows"></tbody>
+              </table>
+            </div>
+            <p id="cr-detail-caption" class="hint"></p>
+          </div>
+        </div>
+      </div>
+
+      <aside class="ib-side">
+        <details id="params" class="card" open>
+          <summary>Regelwerk <span class="badge">Archiv, nur lesbar</span></summary>
+          <p class="hint">Regelbasierter Index aus der Zeit vor dem Metrik-Builder: Wertentwicklung und Bestandteile bleiben sichtbar, die Regeln sind nicht mehr bearbeitbar. Neue Indizes entstehen aus validierten Metriken („+ Neuer Index“).</p>
+          <ul id="rule-summary" class="rule-summary"></ul>
+        </details>
+      </aside>
+    </section>
   </section>
 
-  <div class="index-bar">
-    <div id="index-buttons"></div>
-    <button id="new-index" type="button">+ Neuer Index</button>
-  </div>
-  <div id="new-index-form" class="card hidden">
-    <div class="row">
-      <input id="new-index-name" type="text" placeholder="Name des neuen Index" maxlength="128">
-      <button id="create-index" type="button">Anlegen</button>
-      <button id="cancel-new-index" type="button">Abbrechen</button>
-    </div>
-    <p class="hint">Die Parameter werden aus dem Panel „Parameter" übernommen (ohne gewählten Index: Standardwerte).</p>
-    <p id="new-index-error" class="error-text hidden"></p>
-  </div>
-  <p id="status">Lade Indizes …</p>
-
-  <section id="result" class="hidden">
+  <!-- ===== Data quality & look-ahead guards ===== -->
+  <section data-view-panel="quality" class="hidden">
     <div class="card">
-      <div class="value-row">
-        <span class="big" id="value">–</span>
-        <span class="kpi"><strong id="method">–</strong>Methode</span>
-        <span class="kpi"><strong id="market-count">–</strong>Märkte</span>
-        <span class="kpi"><strong id="total-liquidity">–</strong>Liquidität ($)</span>
-        <span class="kpi"><strong id="total-volume">–</strong>Volumen ($)</span>
-        <span class="kpi"><strong id="as-of">–</strong>Stand</span>
+      <div class="card-head">
+        <div>
+          <h2>Gespeicherte Daten prüfen</h2>
+          <p class="hint">Jeder Wert zählt nur für den Tag, an dem er beobachtet wurde, und nur vor US-Börsenschluss.
+            Was dagegen verstößt, ist für alle Auswertungen gesperrt (kein Lookahead-Bias).</p>
+        </div>
+        <div class="controls">
+          <span id="qual-time" class="muted"></span>
+          <button id="qual-refresh" type="button" class="ghost">Neu prüfen</button>
+        </div>
+      </div>
+      <div id="qual-kpis" class="kpis"></div>
+      <p id="qual-status" class="hint"></p>
+    </div>
+    <div class="card">
+      <h2>Lookahead-Schutz</h2>
+      <div class="table-scroll"><table class="qual-checks"><thead><tr><th>Status</th><th>Prüfung</th><th class="num">Anzahl</th><th>Bedeutung</th></tr></thead>
+        <tbody id="qual-lookahead"></tbody></table></div>
+    </div>
+    <div class="card">
+      <h2>Datensauberkeit</h2>
+      <div class="table-scroll"><table class="qual-checks"><thead><tr><th>Status</th><th>Prüfung</th><th class="num">Anzahl</th><th>Bedeutung</th></tr></thead>
+        <tbody id="qual-clean"></tbody></table></div>
+    </div>
+    <div class="card">
+      <h2>Abdeckung je Tag</h2>
+      <p class="hint">Neueste 90 Snapshot-Tage: echte Tagesläufe, rückgefüllte Zeilen, gesperrte Zeilen und endgültige Aktien-Schlusskurse.</p>
+      <div class="table-scroll qual-coverage"><table><thead><tr><th>Datum</th><th class="num">Live</th><th class="num">Rückgefüllt</th>
+        <th class="num">Gesperrt</th><th class="num">Aktienkurse</th></tr></thead><tbody id="qual-coverage"></tbody></table></div>
+    </div>
+    <div class="card">
+      <h2>Markt untersuchen</h2>
+      <div class="row">
+        <input id="qual-search" type="search" placeholder="Titel enthält … (mind. 2 Zeichen)" maxlength="100">
+        <button id="qual-search-go" type="button">Suchen</button>
+      </div>
+      <ul id="qual-hits" class="qual-hits"></ul>
+      <div id="qual-market" class="hidden">
+        <h3 id="qual-market-title"></h3>
+        <div class="table-scroll qual-coverage"><table><thead><tr><th>Datum</th><th class="num">Preis</th><th class="num">24h-Volumen (USD)</th>
+          <th>Herkunft</th><th>Beobachtet (UTC)</th><th>Prüfung</th></tr></thead><tbody id="qual-rows"></tbody></table></div>
       </div>
     </div>
-
-    <details id="params" class="card">
-      <summary>Parameter <span id="dirty-badge" class="badge hidden">ungespeicherte Änderungen</span></summary>
-      <div class="param-grid">
-        <div class="field">
-          <span>Keywords (Titel enthält mindestens eines; leer = keine Einschränkung)</span>
-          <div id="keyword-chips" class="chips"></div>
-          <input id="keyword-input" type="text" placeholder="Keyword eingeben und Enter drücken">
+    <!-- Fed rate chains: raw layer of the FOMC decision markets, front and second chain -->
+    <div class="card" id="fed-card">
+      <div class="card-head">
+        <div>
+          <h2>Fed-Zinsketten</h2>
+          <p class="hint">Erwartete Zinsänderung (bp) je Fed-Sitzung aus Kalshi und Polymarket: Ausgangspreise auf 100 % normiert,
+            Summe aus Wahrscheinlichkeit × Zinsschritt. Front-Kette = nächste Sitzung, Zweitkette = übernächste; nach jeder
+            Entscheidung rollen beide weiter. Tagesänderungen werden immer innerhalb derselben Sitzung gemessen.</p>
         </div>
-        <div class="field">
-          <span>Tags (Markt trägt mindestens einen; leer = keine Einschränkung)</span>
-          <input id="tag-search" type="search" placeholder="Tags durchsuchen …">
-          <div id="tag-list" class="tag-list"></div>
-        </div>
-        <div class="field inline">
-          <span>Mindestliquidität (USD)</span>
-          <input id="min-liquidity" type="number" min="10000" step="1000">
-          <p class="hint">mindestens 10 000 USD (globale Schwelle der Grundgesamtheit)</p>
-        </div>
-        <div class="field inline">
-          <span>Preis-Korridor (0 ≤ min &lt; max ≤ 1)</span>
-          <input id="min-price" type="number" min="0" max="1" step="0.01"> –
-          <input id="max-price" type="number" min="0" max="1" step="0.01">
+        <div class="controls">
+          <select id="fed-series" aria-label="Reihe">
+            <option value="combined">Kombiniert</option><option value="kalshi">Kalshi</option><option value="polymarket">Polymarket</option>
+          </select>
+          <button id="fed-refresh" type="button" class="ghost">Neu berechnen</button>
+          <button id="fed-load" type="button" class="ghost">Rohdaten nachladen</button>
+          <button id="fed-stage-fetch" type="button" class="ghost" title="API-Antworten beider Quellen unverändert in den Staging-Ordner schreiben">Abrufen → Staging</button>
+          <button id="fed-stage-load" type="button" class="ghost" title="Neue Staging-Dateien 1:1 in den Raw-Layer laden">Staging → Raw</button>
         </div>
       </div>
-      <p id="param-error" class="error-text hidden"></p>
-      <div class="actions">
-        <button id="save-rule" type="button" class="primary" disabled>Dauerhaft speichern</button>
-        <button id="discard-rule" type="button" disabled>Verwerfen</button>
-        <span class="spacer"></span>
-        <button id="delete-index" type="button" class="danger">Index löschen</button>
-        <span id="delete-confirm" class="hidden">Wirklich löschen?
-          <button id="delete-yes" type="button" class="danger">Ja, löschen</button>
-          <button id="delete-no" type="button">Nein</button>
-        </span>
+      <p id="fed-status" class="hint"></p>
+      <p id="fed-staging-status" class="hint" role="status" aria-live="polite"></p>
+      <h3>Kettenverlauf</h3>
+      <svg id="fed-chart" viewBox="0 0 800 220" preserveAspectRatio="none" role="img" aria-label="Front- und Zweitkette"></svg>
+      <div id="fed-xaxis" class="fed-xaxis" aria-hidden="true"></div>
+      <p class="hint fed-legend"><span class="fed-key front"></span> Front-Kette <span class="fed-key second"></span> Zweitkette
+        <span class="fed-key roll"></span> Roll-Tag · <span id="fed-chart-caption"></span> · Klick in den Chart zeigt die Rohwerte des Tages.</p>
+      <h3>Prüfungen</h3>
+      <div class="table-scroll"><table class="qual-checks"><thead><tr><th>Status</th><th>Prüfung</th><th class="num">Anzahl</th><th>Bedeutung</th></tr></thead>
+        <tbody id="fed-checks"></tbody></table></div>
+      <h3>Abdeckung je Sitzung und Quelle</h3>
+      <p class="hint">Balken = Tage mit Wert von erstem bis letztem Tag; rote Striche = Lücken.</p>
+      <div id="fed-coverage" class="fed-coverage"></div>
+      <div id="fed-day" class="hidden">
+        <h3 id="fed-day-title"></h3>
+        <div class="table-scroll qual-coverage"><table><thead><tr><th>Sitzung</th><th>Kette</th><th>Quelle</th><th>Ausgang</th>
+          <th class="num">bp</th><th class="num">Preis</th><th class="num">Wahrsch.</th><th class="num">Umsatz (USD)</th>
+          <th>Beobachtet (UTC)</th><th>Herkunft</th></tr></thead><tbody id="fed-day-rows"></tbody></table></div>
       </div>
-    </details>
-
-    <div class="card">
-      <div id="toolbar">
-        <input id="market-filter" type="search" placeholder="Märkte filtern (Titel/Tags) …">
-        <select id="source-filter"><option value="">Alle Quellen</option></select>
-        <button id="refresh" type="button">↻ Aktualisieren</button>
-      </div>
-      <p id="funnel" class="hidden"></p>
-      <table>
-        <thead>
-          <tr>
-            <th data-key="source">Quelle <span class="arrow"></span></th>
-            <th data-key="title">Markt <span class="arrow"></span></th>
-            <th data-key="category">Kategorie <span class="arrow"></span></th>
-            <th class="num" data-key="price">Preis <span class="arrow"></span></th>
-            <th class="num" data-key="volume">Volumen ($) <span class="arrow"></span></th>
-            <th class="num" data-key="liquidity">Liquidität ($) <span class="arrow"></span></th>
-          </tr>
-        </thead>
-        <tbody id="markets"></tbody>
-      </table>
-      <p id="empty-note" class="hidden">Kein Markt entspricht dem Filter.</p>
     </div>
   </section>
+  <section data-view-panel="metrics" class="hidden"><div class="card"><div class="card-head"><div><h2>Metrik-Katalog</h2>
+    <p class="hint">Tägliche Zeitreihen mit fester Definition. Status: <strong>draft</strong> = nicht freigegeben, <strong>validated</strong> = alle Prüfungen grün und manuell freigegeben, <strong>blocked</strong> = eine Prüfung fällt durch (automatische Sperre) oder manuell gesperrt. Die Prüfungen laufen bei jedem Nachladen der Daten erneut. <strong>Liquidität</strong> = durchschnittlicher täglicher 24h-Umsatz (USD) der Märkte hinter der Metrik in den letzten 30 Tagen mit Daten; Polymarket veröffentlicht für die Fed-Märkte keinen Tagesumsatz. Mit „Mindest-Liquidität“ werden Metriken darunter oder ohne Umsatzdaten ausgeblendet.</p></div>
+    <div class="controls"><label class="field inline"><span>Mindest-Liquidität (USD, Ø 30 T)</span><input id="metrics-minliq" type="number" min="0" step="1000" value="0" list="liq-presets" title="Übliche Werte zur Auswahl oder eigener Betrag"></label>
+      <button id="metrics-new" type="button">+ Neue Metrik</button><button id="metrics-check" type="button" class="ghost">Neu prüfen</button></div></div><p id="metrics-liqmedian" class="hint"></p><p id="metrics-status" class="hint" role="status" aria-live="polite"></p></div>
+    <details id="metric-new" class="card"><summary>+ Neue Metrik bauen <span class="hint">(eigener Markt-Korb aus Kalshi/Polymarket)</span></summary>
+      <p class="hint">Markt-Korb: liquiditätsgewichteter Preis (24h-Umsatz) der gewählten Märkte je Tag aus den täglichen Markt-Snapshots. Neue Metriken starten als <strong>draft</strong> und durchlaufen die Prüfungen; Werte entstehen nur für Tage, an denen Snapshots der Märkte vorliegen.</p>
+      <label class="field"><span>Name</span><input id="mn-name" type="text" maxlength="128" placeholder="z. B. Rezessionsrisiko USA"></label>
+      <label class="field"><span>Beschreibung / Berechnung (optional)</span><textarea id="mn-calc" maxlength="4000" rows="2"></textarea></label>
+      <div class="mn-search"><input id="mn-q" type="search" placeholder="Märkte suchen (Kalshi + Polymarket)" aria-label="Märkte suchen"><select id="mn-source" aria-label="Quelle"><option value="">Alle Quellen</option><option value="kalshi">Kalshi</option><option value="polymarket">Polymarket</option></select><button id="mn-search" type="button" class="ghost">Suchen</button></div>
+      <div id="mn-results" class="mn-results"></div><div class="controls"><button id="mn-more" type="button" class="ghost" disabled>Mehr laden</button></div>
+      <p class="hint">Ausgewählte Märkte: <button id="mn-clear" type="button" class="ghost" disabled>Auswahl leeren</button></p><div id="mn-selected" class="chips"></div>
+      <div class="controls"><button id="mn-create" type="button" disabled>Metrik anlegen</button></div>
+      <p id="mn-status" class="hint" role="status" aria-live="polite"></p>
+    </details><div id="metrics-list"></div></section>
 </main>
 
-<script>
-const $ = (id) => document.getElementById(id);
-const fmtNum = (v, digits = 0) =>
-  v == null ? "–" : Number(v).toLocaleString("de-DE", { maximumFractionDigits: digits });
-const METHOD_LABELS = {
-  liquidity_weighted: "liquiditätsgewichtet",
-  simple_average: "einfacher Durchschnitt",
-  no_data: "keine Daten",
-};
-
-// Interactive view state: stored rules, last payload plus current sort/filter selection.
-const state = { name: null, rules: {}, data: null, sortKey: null, sortDir: 1, filter: "", source: "" };
-
-// (Re)builds the index buttons from the stored rules; returns the index names.
-async function loadIndices() {
-  try {
-    const res = await fetch("/indices");
-    if (!res.ok) throw new Error("HTTP " + res.status);
-    const indices = await res.json();
-    state.rules = Object.fromEntries(indices.map((idx) => [idx.index_name, idx]));
-    const container = $("index-buttons");
-    container.replaceChildren();
-    for (const idx of indices) {
-      const btn = document.createElement("button");
-      btn.textContent = idx.index_name;
-      btn.dataset.name = idx.index_name;
-      btn.addEventListener("click", () => loadIndex(idx.index_name, btn));
-      container.appendChild(btn);
-    }
-    if (!indices.length) {
-      $("result").classList.add("hidden");
-      setStatus("Keine Indizes definiert.", false);
-    } else {
-      setStatus("Index anklicken, um ihn abzurufen.", false);
-    }
-    return indices.map((idx) => idx.index_name);
-  } catch (err) {
-    setStatus("Indizes konnten nicht geladen werden: " + err.message, true);
-    return [];
-  }
-}
-
-function selectIndex(name) {
-  const btn = document.querySelector(`#index-buttons button[data-name="${CSS.escape(name)}"]`);
-  if (btn) btn.click();
-}
-
-// Filter funnel of the rule engine: survivor count after each stage.
-const FUNNEL_LABELS = [
-  ["loaded", "Geladen"], ["tags", "nach Tags"], ["keywords", "nach Keywords"],
-  ["liquidity", "nach Liquidität"], ["price", "nach Preis-Korridor"], ["end_date", "nach Enddatum"],
-];
-
-async function loadIndex(name, btn, refresh = false) {
-  state.name = name;
-  document.querySelectorAll("#index-buttons button").forEach((b) => b.classList.remove("active"));
-  if (btn) btn.classList.add("active");
-  setStatus("Rufe „" + name + "“ ab …", false);
-  $("result").classList.add("hidden");
-  try {
-    const res = await fetch("/indices/" + encodeURIComponent(name) + (refresh ? "?refresh=1" : ""));
-    if (!res.ok) throw new Error("HTTP " + res.status);
-    render(await res.json());
-    setStatus("", false);
-    document.dispatchEvent(new CustomEvent("index-loaded", { detail: { name } }));
-  } catch (err) {
-    setStatus("Abruf fehlgeschlagen: " + err.message, true);
-  }
-}
-
-function render(data) {
-  state.data = data;
-  $("value").textContent = data.value == null ? "–" : (data.value * 100).toFixed(1) + " %";
-  $("method").textContent = METHOD_LABELS[data.method] || data.method;
-  $("market-count").textContent = data.market_count;
-  $("total-liquidity").textContent = fmtNum(data.total_liquidity);
-  $("total-volume").textContent = fmtNum(data.total_volume);
-  $("as-of").textContent = new Date(data.as_of).toLocaleString("de-DE");
-  renderFunnel(data.funnel);
-
-  const select = $("source-filter");
-  const sources = [...new Set(data.markets.map((m) => m.source))].sort();
-  select.replaceChildren(new Option("Alle Quellen", ""));
-  for (const s of sources) select.appendChild(new Option(s, s));
-  if (sources.includes(state.source)) select.value = state.source; else state.source = "";
-
-  renderTable();
-  $("result").classList.remove("hidden");
-}
-
-function renderFunnel(funnel) {
-  const el = $("funnel");
-  if (!funnel) { el.classList.add("hidden"); return; }
-  el.replaceChildren();
-  FUNNEL_LABELS.forEach(([key, label], i) => {
-    if (i > 0) el.appendChild(document.createTextNode(" → "));
-    const strong = document.createElement("strong");
-    strong.textContent = fmtNum(funnel[key]);
-    el.appendChild(document.createTextNode(label + " "));
-    el.appendChild(strong);
-  });
-  el.classList.remove("hidden");
-}
-
-const marketTags = (m) => (m.tags && m.tags.length ? m.tags : (m.category ? [m.category] : []));
-
-function visibleMarkets() {
-  const q = state.filter.trim().toLowerCase();
-  let rows = state.data.markets.filter(
-    (m) =>
-      (!state.source || m.source === state.source) &&
-      (!q || (m.title + " " + marketTags(m).join(" ")).toLowerCase().includes(q))
-  );
-  if (state.sortKey) {
-    const key = state.sortKey, dir = state.sortDir;
-    rows = [...rows].sort((a, b) => {
-      const [x, y] = [a[key], b[key]];
-      if (x == null) return 1;
-      if (y == null) return -1;
-      const cmp = typeof x === "number" ? x - y : String(x).localeCompare(String(y), "de");
-      return cmp * dir;
-    });
-  }
-  return rows;
-}
-
-function renderTable() {
-  document.querySelectorAll("th[data-key]").forEach((th) => {
-    th.querySelector(".arrow").textContent =
-      th.dataset.key === state.sortKey ? (state.sortDir === 1 ? "▲" : "▼") : "";
-  });
-  const rows = visibleMarkets();
-  $("empty-note").classList.toggle("hidden", rows.length > 0);
-  const tbody = $("markets");
-  tbody.replaceChildren();
-  for (const m of rows) {
-    const row = document.createElement("tr");
-    const cells = [
-      [m.source, ""], [marketTitle(m), ""], [marketTags(m).join(", ") || "–", "tags"],
-      [m.price == null ? "–" : Number(m.price).toFixed(3), "num"],
-      [fmtNum(m.volume), "num"], [fmtNum(m.liquidity), "num"],
-    ];
-    for (const [content, cls] of cells) {
-      const td = document.createElement("td");
-      if (content instanceof Node) td.appendChild(content); else td.textContent = content;
-      if (cls) td.className = cls;
-      row.appendChild(td);
-    }
-    tbody.appendChild(row);
-  }
-}
-
-function marketTitle(m) {
-  if (!m.url) return m.title;
-  const a = document.createElement("a");
-  a.href = m.url;
-  a.target = "_blank";
-  a.rel = "noopener noreferrer";
-  a.textContent = m.title;
-  return a;
-}
-
-$("market-filter").addEventListener("input", (e) => {
-  state.filter = e.target.value;
-  if (state.data) renderTable();
-});
-$("source-filter").addEventListener("change", (e) => {
-  state.source = e.target.value;
-  if (state.data) renderTable();
-});
-$("refresh").addEventListener("click", () => {
-  if (!state.name) return;
-  // The parameter panel cancels this event while it holds unsaved changes (previews instead).
-  const event = new CustomEvent("refresh-requested", { cancelable: true });
-  if (document.dispatchEvent(event)) loadIndex(state.name, activeButton(), true);
-});
-document.querySelectorAll("th[data-key]").forEach((th) => {
-  th.addEventListener("click", () => {
-    const key = th.dataset.key;
-    state.sortDir = state.sortKey === key ? -state.sortDir : 1;
-    state.sortKey = key;
-    if (state.data) renderTable();
-  });
-});
-
-const activeButton = () => document.querySelector("#index-buttons button.active");
-
-function setStatus(text, isError) {
-  const el = $("status");
-  el.textContent = text;
-  el.classList.toggle("error", isError);
-  el.classList.toggle("hidden", !text);
-}
-
-loadIndices();
-</script>
-<script src="/static/params.js"></script>
-<script src="/static/eui.js"></script>
+<script src="/static/shell.js"></script>
+<script src="/static/indices.js"></script>
+<script src="/static/fields.js"></script>
+<script src="/static/builder.js"></script>
+<script src="/static/correlation.js"></script>
+<script src="/static/trades.js"></script>
+<script src="/static/attribution.js"></script>
+<script src="/static/regression.js"></script>
+<script src="/static/quality.js"></script>
+<script src="/static/fedstaging.js"></script>
+<script src="/static/fedchains.js"></script>
+<script src="/static/metrics.js"></script>
+<script src="/static/metricnew.js"></script>
+  <datalist id="liq-presets">
+    <option value="0" label="alle (kein Filter)"></option>
+    <option value="1000" label="1 Tsd. USD"></option>
+    <option value="10000" label="10 Tsd. USD"></option>
+    <option value="50000" label="50 Tsd. USD"></option>
+    <option value="100000" label="100 Tsd. USD"></option>
+    <option value="500000" label="500 Tsd. USD"></option>
+    <option value="1000000" label="1 Mio. USD"></option>
+  </datalist>
+<script src="/static/metricindex.js"></script>
 </body>
 </html>

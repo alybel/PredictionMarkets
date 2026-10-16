@@ -20,6 +20,13 @@ def test_migration_runs_against_empty_db(tmp_path, monkeypatch):
     tables = set(inspector.get_table_names())
     assert {"markets", "index_rules"} <= tables
     assert {"eui_snapshot_runs", "eui_market_snapshots", "eui_classifications", "eui_compositions", "eui_index_values", "eui_events"} <= tables
+    assert "eui_reference_values" in tables
+    assert "manufacture_drafts" in tables
+    assert "stock_prices" in tables
+    draft_cols = {c["name"] for c in inspector.get_columns("manufacture_drafts")}
+    assert {"name", "intent", "description", "methodology", "keywords", "tags", "min_liquidity", "markets", "messages", "status", "published_index", "version"} <= draft_cols
+    classification_cols = {c["name"] for c in inspector.get_columns("eui_classifications")}
+    assert {"uncertainty_note", "direction", "reference_indicator", "reference_value"} <= classification_cols
     snapshot_cols = {c["name"] for c in inspector.get_columns("eui_market_snapshots")}
     assert {"snapshot_date", "source", "external_id", "price", "spread", "depth_usd", "volume_24h_usd", "liquidity_score", "eligible", "exclusion_reason"} <= snapshot_cols
 

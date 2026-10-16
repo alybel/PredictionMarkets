@@ -11,3 +11,5 @@ backend/dev.db
 
 # Probe run files are kept as workflow artifacts, only probe/data/ is committed
 probe/runs/
+# Staging files of the API fetches (local only, never committed; probe/data/ stays tracked)
+/data/

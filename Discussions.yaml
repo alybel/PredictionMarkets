@@ -1,4 +1,615 @@
 # Discussions.yaml — benannte Claude-Diskussionen (verwaltet von DevConsole)
+- id: disc-1015-2227-regression-index-und-bestandteil
+  name: 'Regression: Index und Bestandteile als Regressoren fehlt'
+  thema: 'great. Now we lost the capability to regress the information (index and its constitents
+    daily changes as regressors) to the next day stock returns. '
+  model: Standard
+  thinking: standard
+  erstellt: 2026-10-15 22:27
+  bild: .devconsole/discussions/1168A676-226E-4EC6-81F0-2B3DA3576A8E.png
+  archiviert: 2026-10-15 22:31
+  ergebnis: 'Ins Ticket übernommen: Regression Index und Bestandteile → Aktienrendite am nächsten
+    Tag für Metrik-Indizes (1015-2231-regression-index-und-bestandteil)
+
+    Ursache: Die Aktien-Auswertung (Korrelation, Signal-Precision, Aktien-Detail mit Trades,
+    Attribution) hängt nur am regelbasierten Archiv-Index (IndexRule); metricindex.js:84 setzt
+    state.name = null, daher bleibt sie bei Metrik-Indizes (z. B. „Fed Rates“) inaktiv.
+
+    Umfang:
+
+    1. Bestehende Werkzeuge (Korrelationstabelle Top 100, Signal-Precision, Aktien-Detail
+    mit Chart und Trades) auch für Metrik-Indizes anbinden. Archiv-Indizes bleiben unverändert.
+
+    2. Zeitlogik wie bisher, ohne Lookahead: Änderung von Tag T (vor US-Close) gepaart mit
+    der Rendite von Close T bis Close am nächsten Handelstag; PIT-Prüfung (quality.pit) gilt
+    weiter.
+
+    3. Einheit des Gesamtindex sind z-Punkte: Steigung, Mindest-Veränderung (min_change) und
+    Beschriftungen entsprechend umstellen.
+
+    4. Zwei Regressionen nebeneinander:
+
+    - Einfach: ΔIndex (z) → Rendite.
+
+    - Mehrfach: Tagesänderung jeder Metrik in Roheinheit (z. B. bp) als eigener Regressor
+    → Rendite; je Bestandteil Koeffizient und p-Wert, dazu gemeinsamer F-Test und R².
+
+    - Warnhinweis bei stark korrelierten Bestandteilen (Multikollinearität, z. B. Korrelation
+    der Regressoren bzw. VIF über Schwelle).
+
+    - Ersetzt bei Metrik-Indizes die alte Markt-Attribution.
+
+    5. Zielgröße umschaltbar: Überrendite gegenüber dem Markt (Voreinstellung) oder rohe Rendite;
+    Markt = gleichgewichteter Schnitt der Top 100.
+
+    6. Gesamtmarkt (Schnitt Top 100) als eigene, oberste Zeile ausgewertet, immer mit roher
+    Rendite.
+
+    7. Mehrfachtests: erwartete Zufallstreffer und Bonferroni-Schwelle wie bisher, auch für
+    die Regression.
+
+    8. Logging: jeder Aufruf (Index, Zeitraum, Zielgröße, Anzahl Tage/Aktien, signifikante
+    Treffer) und jeder Klick (Zielgröße umschalten, Aktie öffnen) im app.log.
+
+    Definition of Done:
+
+    - „Fed Rates“ zeigt die Tabelle mit Gesamtmarkt-Zeile plus 100 Aktien.
+
+    - Einfache und mehrfache Regression werden nebeneinander angezeigt, inklusive Koeffizienten,
+    p-Werten, F-Test und R².
+
+    - Schalter Überrendite/rohe Rendite funktioniert, Voreinstellung ist Überrendite.
+
+    - Bei stark korrelierten Bestandteilen erscheint ein sichtbarer Warnhinweis.
+
+    - Steigung und Mindest-Veränderung sind bei Metrik-Indizes in z-Punkten beschriftet und
+    gerechnet.
+
+    - Aktien-Detail mit Chart und Trades öffnet sich auch bei Metrik-Indizes.
+
+    - Archiv-Indizes funktionieren exakt wie vorher.
+
+    - Aufrufe und Klicks sind im app.log nachvollziehbar.
+
+    - Requirements.log, Changelog.md aktualisiert; alle Tests grün, ohne Live-API-Aufrufe
+    und ohne lokale Dateien.
+
+    Testumfang:
+
+    - Zeitlogik: Paare nutzen nur Index-/Metrikwerte bis Tag T und die Rendite Close T → Close
+    nächster Handelstag; keine Paare über Datenlücken > MAX_GAP_DAYS.
+
+    - Einfache Regression liefert auf synthetischen Daten mit bekannter Steigung den erwarteten
+    Koeffizienten und p-Wert.
+
+    - Mehrfache Regression liefert auf synthetischen Daten mit zwei bekannten Koeffizienten
+    die erwarteten Werte, F-Test und R².
+
+    - Multikollinearität: zwei nahezu identische Regressoren lösen den Warnhinweis aus, unabhängige
+    nicht.
+
+    - Überrendite: Aktie minus gleichgewichteter Top-100-Schnitt wird korrekt berechnet; Gesamtmarkt-Zeile
+    nutzt rohe Rendite.
+
+    - Bonferroni-Schwelle und erwartete Zufallstreffer stimmen mit der Anzahl getesteter Aktien
+    überein.
+
+    - Endpunkt für Metrik-Index gibt 200 mit vollständiger Struktur; unbekannter Index gibt
+    404.
+
+    - Regressionstest: Korrelations- und Attribution-Endpunkte der Archiv-Indizes liefern
+    unveränderte Ergebnisse.
+
+    - PIT: provisorische oder zukunftsdatierte Kurse und Snapshots fließen nicht ein.'
+- id: disc-1015-2152-herkunft-der-sprunge-unklar
+  name: Herkunft der Sprünge unklar
+  thema: 'where are these jumps coming from? '
+  model: Standard
+  thinking: standard
+  erstellt: 2026-10-15 21:52
+  bild: .devconsole/discussions/418C38DD-192B-4BEE-AC86-99660B223BD2.png
+  archiviert: 2026-10-15 21:57
+  ergebnis: 'Ins Ticket übernommen: Index-Builder nur aus validierten Metriken (1015-2157-index-builder-nur-aus-validierte)
+
+    Der Index-Builder bietet ausschließlich Metriken mit Status validated zur Auswahl an.
+    Die bisherige Regel-Auswahl (Tags, Keywords, Liquiditätsfilter, Preis-Korridor) entfällt
+    im Builder (ersetzt Requirements #4, #11, #25 → superseded).
+
+    Ein Index besteht aus einer oder mehreren validierten Metriken mit Gewichten; Metriken
+    unterschiedlicher Einheiten (bp, Wahrscheinlichkeit) werden für die Indexberechnung standardisiert.
+
+    Wird eine Metrik eines bestehenden Index später gesperrt (blocked), rechnet der Index
+    weiter, zeigt aber eine deutliche Warnung; neue Indizes mit dieser Metrik sind nicht möglich.
+
+    Bestehende regelbasierte Indizes bleiben als „Archiv, nur lesbar“ erhalten (Wertentwicklung
+    und Bestandteile sichtbar, nicht mehr bearbeitbar), nichts wird gelöscht.
+
+    Index Manufacture (#17): Katalog und KI-Vorschläge bleiben; „Als Index veröffentlichen“
+    wird zu „Als Metrik-Entwurf anlegen“ (Status draft).
+
+    Definition of Done:
+
+    - Builder zeigt in der Auswahl nur validierte Metriken; draft und blocked erscheinen nicht
+
+    - Backend lehnt das Speichern eines Index mit nicht validierter Metrik mit 400/409 ab
+
+    - Regel-Felder (Tags, Keywords, Liquidität, Preis-Korridor) sind aus dem Builder entfernt
+
+    - Bestehende regelbasierte Indizes sind als Archiv sichtbar und nicht bearbeitbar
+
+    - Index mit nachträglich gesperrter Metrik rechnet weiter und zeigt eine sichtbare Warnung
+
+    - Index Manufacture legt statt eines Index einen Metrik-Entwurf (draft) an
+
+    - Alle Auswahl-, Speicher- und Warnereignisse stehen in app.log
+
+    - Requirements.log: #4, #11, #25 auf superseded mit Verweis, #17 angepasst; Changelog.md
+    aktualisiert
+
+    Testumfang:
+
+    - Auswahl-Endpunkt des Builders liefert nur validierte Metriken
+
+    - Speichern eines Index mit draft- oder blocked-Metrik wird abgelehnt
+
+    - Index aus zwei validierten Metriken mit unterschiedlichen Einheiten liefert standardisierten
+    Indexwert
+
+    - Sperre einer Metrik → bestehender Index liefert weiter Werte plus Warnflag
+
+    - Archiv-Index ist abrufbar, Bearbeiten (PUT) wird abgelehnt
+
+    - Index Manufacture „Als Metrik-Entwurf anlegen“ erzeugt eine Metrik mit Status draft'
+- id: disc-1015-2103-fed-zinsketten-abruf-schlagt-feh
+  name: Fed-Zinsketten-Abruf schlägt fehl (HTTP 500)
+  thema: '295 Märkte geprüft, 0 neu, 0 Tageswerte ergänzt, 295 fehlgeschlagen. Fed-Zinsketten
+    fehlgeschlagen: coverage: HTTP 500'
+  model: Standard
+  thinking: standard
+  erstellt: 2026-10-15 21:03
+  archiviert: 2026-10-15 21:19
+  ergebnis: 'Ins Ticket übernommen: Staging-Ordner und idempotenter Raw-Layer in SQLite (Pilot:
+    Fed-Zinsketten) (1015-2119-staging-ordner-und-idempotenter)
+
+    Auslöser: Beim Nachladen der Fed-Zinsketten scheitern alle 295 Märkte und /quality/fed/coverage
+    liefert HTTP 500. Ursache laut app.log: In backend/dev.db fehlen fed_markets/fed_prices
+    (Migration 0009 nie ausgeführt, kein automatisches Schema-Update). Der 500er erscheint
+    nicht in app.log, weil unbehandelte Exceptions an der Request-Logging-Middleware vorbeilaufen.
+    Der Loader ruft 173 s lang das Netz ab, bevor er beim Speichern scheitert.
+
+    Neuer Aufbau der Datenladung, als Pilot für die Fed-Zinsketten (Kalshi + Polymarket):
+
+    1. Abrufen -> Staging: API-Antworten werden unverändert als Dateien unter data/staging/<quelle>/<datensatz>/<datum>/
+    abgelegt (inkl. Abrufzeitpunkt und URL). Dateien sind unveränderlich, werden nie überschrieben.
+    Identischer Inhalt zur letzten Datei derselben Anfrage wird nicht erneut geschrieben.
+    data/ ist gitignored.
+
+    2. Staging -> Raw: Neue Staging-Dateien werden unverändert in Raw-Tabellen der lokalen
+    SQLite-DB geladen (Inhalt, Quelle, Datensatz, Abrufzeit, Prüfsumme). Ein Ladeprotokoll
+    hält fest, welche Dateien geladen sind.
+
+    3. Idempotenz ist Kernanforderung: Unsere Ladeprozesse dürfen nie Duplikate in der DB
+    erzeugen. Absicherung über Eindeutigkeitsregeln in der DB selbst (nicht nur Code-Prüfung),
+    Einfügen überspringt Vorhandenes still. Identischer Inhalt wird einmal gespeichert (mit
+    Zeitpunkt des ersten Abrufs), geänderter Inhalt ist eine neue Beobachtung und wird gespeichert.
+
+    4. Beide Schritte getrennt als CLI-Befehl und als Button im Bereich Fed-Zinsketten; Schema
+    wird vor dem Laden automatisch auf head migriert (auch in start_dev.sh vor dem Serverstart).
+
+    5. Logging-Lücke schließen: Unbehandelte Fehler mit Status 500 und Traceback in app.log;
+    API loggt beim Start den Schema-Stand, /health meldet veraltetes Schema; Frontend zeigt
+    die Fehlermeldung des Servers statt nur "HTTP 500".
+
+    Bestehende Tabellen fed_markets/fed_prices und die Fed-Sicht bleiben erhalten; deren Befüllung
+    aus dem Raw-Layer sowie weitere Quellen (EUI-Snapshots, Aktienkurse, Backfill, Probe)
+    und eine Spiegelung nach Neon sind eigene Folge-Tickets.
+
+    Definition of Done:
+
+    - Abruf schreibt API-Antworten unverändert nach data/staging/<quelle>/<datensatz>/<datum>/
+    und überschreibt nie eine vorhandene Datei
+
+    - Identischer Abruf erzeugt keine zweite Staging-Datei, geänderter Inhalt eine neue
+
+    - data/ ist in .gitignore eingetragen
+
+    - Ladeschritt bringt neue Staging-Dateien 1:1 in die Raw-Tabellen; ein zweiter Lauf lädt
+    0 Dateien
+
+    - Raw-Tabellen und Ladeprotokoll haben Eindeutigkeitsregeln auf ihrem fachlichen Schlüssel
+    in der DB (Migration vorhanden)
+
+    - Wiederholte und gleichzeitige Läufe ergeben exakt denselben Datenbestand ohne Duplikate
+
+    - Abbruch mitten im Lauf hinterlässt keine halben Daten (pro Datei alles oder nichts);
+    der nächste Lauf setzt sauber fort
+
+    - Fehlerhafte Staging-Dateien werden protokolliert und übersprungen, der Lauf läuft weiter
+
+    - Vor dem Laden und in start_dev.sh wird das DB-Schema automatisch auf den neuesten Stand
+    gebracht; bestehende Daten in dev.db bleiben erhalten
+
+    - Jeder Lauf loggt gefunden / neu / übersprungen / fehlgeschlagen
+
+    - Unbehandelte Exceptions erscheinen in app.log mit Request-Zeile (Status 500) und Traceback
+
+    - API loggt beim Start den Schema-Stand; /health meldet ein veraltetes Schema
+
+    - Frontend zeigt bei Fehlern die Meldung des Servers statt nur "HTTP 500"
+
+    - CLI-Befehle und Buttons für "Abrufen -> Staging" und "Staging -> Raw" vorhanden, Klicks
+    werden geloggt
+
+    - Bestehende Fed-Sicht (Abdeckung, Ketten, Prüfungen) funktioniert unverändert; alle bestehenden
+    Tests grün
+
+    - Changelog.md, Requirements.log und BugReports.yaml aktualisiert
+
+    Testumfang:
+
+    - Abruf mit simulierter Quelle schreibt die erwarteten Staging-Dateien mit unverändertem
+    Inhalt, Abrufzeit und URL
+
+    - Identischer Abruf zweimal: nur eine Staging-Datei; geänderter Inhalt: zwei Dateien
+
+    - Laden auf leere DB legt das Schema'
+- id: disc-1015-2000-warum-andern-sich-die-gewichte-i
+  name: Warum ändern sich die Gewichte im Index?
+  thema: 'Every time I look into the index, the weights have changed. Why is that? '
+  model: Standard
+  thinking: standard
+  erstellt: 2026-10-15 20:00
+  bild: .devconsole/discussions/096F8EF1-29B2-47EA-AD18-785387116F84.png
+  archiviert: 2026-10-15 20:43
+  ergebnis: 'Ins Ticket übernommen: Fed-Zinsketten: Raw-Layer, erwartete Zinsänderung als
+    Front- und Zweitkette, Sicht in Datenqualität (1015-2043-fed-zinsketten-raw-layer-erwarte)
+
+    Ziel: Zinsindex aus Prognosemärkten mit möglichst langer, sauberer Historie. Bestehende
+    Indizes, Backfill, Korrelation und Datenqualitäts-Ansichten bleiben unverändert.
+
+
+    1. Raw-Layer (eigene Tabellen, getrennt von eui_market_snapshots):
+
+    - Alle Fed-Entscheidungsmärkte (FOMC) von Kalshi und Polymarket laden, auch abgeschlossene,
+    so weit zurück wie die APIs Kurse liefern.
+
+    - Pro Markt: Quelle, externe ID, Sitzungsdatum, Ausgang als Zinsschritt in bp (z. B. -50,
+    -25, 0, +25), Titel, Link.
+
+    - Pro Tag und Ausgang: Preis, Umsatz (falls verfügbar), Abrufzeitpunkt, Herkunft (live/historisch).
+
+    - Append-only: Rohdaten werden nie überschrieben; erneuter Lauf lädt nur Fehlendes nach
+    (idempotent).
+
+    - Point-in-time-Regel wie bisher (quality.pit): kein Tageswert nach US-Börsenschluss des
+    jeweiligen Tages.
+
+    - Startbar per CLI und Endpoint; ein fehlerhafter Markt stoppt den Lauf nicht.
+
+
+    2. Abgeleitete Metrik (Datenebene, aus dem Raw-Layer berechnet):
+
+    - Pro Sitzung und Tag: Wahrscheinlichkeiten der Ausgänge auf 100 % normieren; erwartete
+    Zinsänderung = Summe(Wahrscheinlichkeit × bp).
+
+    - Wahrscheinlichkeitssumme vor Normierung mitspeichern (Qualitätsmerkmal).
+
+    - Reihen getrennt für Kalshi, Polymarket und kombiniert (Mittelwert, wenn beide vorhanden).
+
+    - Zwei Ketten: Front-Kette = jeweils nächste anstehende Sitzung; Zweitkette = jeweils
+    übernächste Sitzung.
+
+    - Nach jeder Entscheidung rollen beide Ketten eine Sitzung weiter (bisherige Zweit-Sitzung
+    wird Front).
+
+    - Am Roll-Tag wird die Tagesänderung nur innerhalb desselben Marktes gemessen (Kettenverknüpfung),
+    der Wechsel erzeugt keinen Sprung.
+
+
+    3. Sicht im Tab "Datenqualität" (neuer Abschnitt "Fed-Zinsketten"):
+
+    - Abdeckung: Zeitbalken pro Sitzung und Quelle, Lücken markiert.
+
+    - Kettenverlauf: Chart von Front- und Zweitkette je Quelle, Roll-Tage markiert.
+
+    - Prüfungen: Wahrscheinlichkeitssumme deutlich ungleich 100 %, fehlende Tage, Abweichung
+    Kalshi vs. Polymarket, Tagessprünge, Werte nach Börsenschluss.
+
+    - Drill-down: Klick auf einen Tag zeigt die Rohwerte je Ausgang, aus denen der Wert entstand.
+
+
+    4. Logging: Laden (Start, Ende, Anzahl Märkte/Zeilen, Fehler je Markt), Berechnung, Roll-Ereignisse,
+    Prüfergebnisse sowie alle Klicks und Eingaben in der neuen Sicht.
+
+
+    Nicht enthalten: Anbindung an die Aktienkorrelation (Folgeticket, sobald die Datenqualität
+    überzeugt).
+
+    Definition of Done:
+
+    - Raw-Tabellen existieren per Alembic-Migration und enthalten Fed-Märkte beider Quellen
+    inklusive abgeschlossener Sitzungen.
+
+    - Zweiter Ladelauf ohne neue Daten fügt 0 Zeilen hinzu und ändert keine bestehende Zeile.
+
+    - Keine Raw-Zeile hat einen Beobachtungszeitpunkt nach dem US-Börsenschluss ihres Tages.
+
+    - Für jeden Tag mit Daten liegen erwartete Zinsänderung, Rohsumme der Wahrscheinlichkeiten
+    und Quelle je Sitzung vor.
+
+    - Front- und Zweitkette sind für jeden Tag mit Daten berechnet; Roll-Tage sind gekennzeichnet.
+
+    - Am Roll-Tag entspricht die Tagesänderung der Kette der Änderung des neuen Front-Marktes
+    gegenüber seinem eigenen Vortageswert.
+
+    - Tab "Datenqualität" zeigt Abdeckung, Kettenverlauf beider Ketten, Prüfungen und Drill-down
+    auf Rohwerte.
+
+    - Bestehende Indizes, Backfill, Korrelation und bisherige Datenqualitäts-Ansichten funktionieren
+    unverändert (bestehende Tests grün).
+
+    - Logging für Laden, Berechnung, Rollen, Prüfungen und UI-Klicks ist vorhanden.
+
+    - Alle Dateien unter 500 Zeilen; Changelog.md und Requirements.log sind aktualisiert.
+
+    Testumfang:
+
+    - Parser Kalshi: Fed-Markt-Antwort (Fixture) wird korrekt in Sitzungsdatum, Ausgang in
+    bp und Tagespreise zerlegt.
+
+    - Parser Polymarket: Fed-Event mit mehreren Ausgängen (Fixture) wird korrekt in Ausgänge
+    mit bp und Tagespreise zerlegt.
+
+    - Idempotenz: zweiter Ladelauf mit denselben Fixture-Daten fügt keine Zeilen hinzu und
+    überschreibt nichts.
+
+    - Point-in-time: Kurspunkt nach US-Börsenschluss wird verworfen.
+
+    - Fehlertoleranz'
+- id: disc-1015-1313-nichts-zu-sehen-hier
+  name: Nichts zu sehen hier
+  thema: "Nothing shown here? \n"
+  model: Standard
+  thinking: standard
+  erstellt: 2026-10-15 13:13
+  bild: .devconsole/discussions/D6C941C3-DB4F-4863-8BE5-8661F98CB20B.png
+  archiviert: 2026-10-15 13:16
+  ergebnis: 'Ins Ticket übernommen: Leere Aktien-Detailansicht beheben (Namenskonflikt fmtShare)
+    + JS-Fehler-Logging (bug-1015-1316-leere-aktien-detailansicht-beheb)
+
+    Klick auf eine Aktie in der Aktien-Korrelation zeigt nur den Ticker; Kennzahlen, Charts,
+    Robustheit, Attribution und Trades bleiben leer, es geht keine Anfrage ans Backend. Ursache:
+    attribution.js:7 und correlation.js:13 deklarieren beide top-level `const fmtShare`; der
+    Browser verwirft daher attribution.js komplett, loadTrades() bricht in trades.js:32 bei
+    loadAttribution(...) ab. Der Fehler erscheint nicht im App-Log.
+
+    Umfang:
+
+    1. Hilfsfunktion in attribution.js umbenennen (z. B. fmtContribution); Format „+0,123“
+    bleibt unverändert.
+
+    2. trades.js: Trades und Attribution unabhängig voneinander laden; ein Fehler der Attribution
+    darf Performance, Renditeverläufe, Robustheit und Trade-Liste nicht verhindern (Fehler
+    wird geloggt).
+
+    3. Globaler Fehler-Fänger im Frontend (window.onerror + unhandledrejection, in shell.js)
+    meldet JS-Fehler mit Meldung, Datei und Zeile an /client-log.
+
+    4. Neuer Test: keine zwei Skripte unter backend/app/static/ deklarieren denselben top-level-Namen
+    (const/let/function/class). Ohne Browser, ohne Netzwerk, läuft in CI auf frischem Klon.
+
+    Definition of Done:
+
+    - Klick auf „SO“ zeigt Titel „SO · Southern Company“, KPIs, beide Charts, Robustheit,
+    Attribution und Trade-Liste.
+
+    - attribution.js lädt ohne „Identifier has already been declared“-Fehler in der Browser-Konsole.
+
+    - Schlägt die Attribution fehl, werden Trades und Charts trotzdem angezeigt und ein Fehler-Eintrag
+    erscheint im Log.
+
+    - Ein ungefangener JS-Fehler im Frontend erscheint in logs/app.log mit Meldung, Datei
+    und Zeile.
+
+    - Neuer Duplikat-Test schlägt mit dem alten Konflikt fehl und ist nach dem Fix grün.
+
+    - Alle bestehenden Tests bleiben grün; Changelog.md und Requirements.log sind aktualisiert.
+
+    Testumfang:
+
+    - Test scannt alle .js-Dateien unter backend/app/static/ auf top-level-Deklarationen und
+    schlägt bei doppeltem Namen über Dateien hinweg fehl (mit Dateinamen in der Fehlermeldung).
+
+    - Test: Duplikat-Erkennung meldet einen künstlich doppelten Namen in zwei Beispiel-Skripten
+    (Negativfall).
+
+    - Test: attribution.js enthält kein top-level `fmtShare` mehr und das Zahlenformat der
+    Attribution bleibt „+0,123“.
+
+    - Test: shell.js registriert Handler für window.onerror und unhandledrejection, die an
+    /client-log senden.
+
+    - Test: POST /client-log mit einem JS-Fehler-Event (Meldung, Datei, Zeile) wird mit 204
+    angenommen und ins App-Log geschrieben.
+
+    - Bestehende Tests zu GET /indices/{name}/correlation/{ticker} und .../attribution bleiben
+    grün.'
+- id: disc-1015-1156-pro-komponente-performance-beitr
+  name: Pro Komponente Performance-Beitrag pro Aktie anzeigen
+  thema: wir haben nun sehr viele Komponenten im Index. Ich möchte pro Komponente den Beitrag
+    zur Performance bei einer Aktie sehen. Wie würden wir das machen?
+  model: Standard
+  thinking: standard
+  erstellt: 2026-10-15 11:56
+  bild: .devconsole/discussions/C044BB52-2DE8-4593-9D0B-BAC203312C6A.png
+  archiviert: 2026-10-15 12:00
+  ergebnis: 'Ins Ticket übernommen: Performance Attribution je Komponente für eine Aktie (1015-1200-performance-attribution-je-kompo)
+
+    In der Aktien-Detailansicht wird angezeigt, welche Komponenten des Index den Zusammenhang
+    „Index-Veränderung → Rendite der Aktie am nächsten Tag" tragen.
+
+    Die Index-Veränderung ΔI je Tag wird exakt auf die Komponenten zerlegt (Index = Σ Gewicht
+    × Preis, Gewicht = 24h-Umsatz-Anteil), jeweils getrennt in Preiseffekt (Gewicht gestern
+    × Preisänderung) und Gewichtseffekt (Gewichtsänderung × Preis heute; Umschichtung inkl.
+    Ein- und Austritte).
+
+    Darauf aufbauend werden Korrelation und Beta der Haupttabelle exakt additiv auf die Komponenten
+    verteilt (Kovarianz-Zerlegung wie bei einer Risiko-Attribution), ebenfalls getrennt nach
+    Preis- und Gewichtseffekt.
+
+    Nur Gesamtsicht über den betrachteten Zeitraum, keine Aufschlüsselung je Tag. Keine Benchmark-Attribution
+    (Brinson gegen Vergleichsindex), keine p-Werte je Komponente.
+
+    Berechnung ausschließlich auf vorhandenen Daten (Markt-Snapshots, Aktienkurse), ohne KI-Aufruf
+    und ohne neue Datenbanktabelle. Erweitert Anforderungen Nr. 26 und Nr. 28.
+
+    Definition of Done:
+
+    - Die Aktien-Detailansicht hat einen Abschnitt „Beitrag je Komponente" mit je Markt: Tage
+    im Index, Ø Gewicht, Anteil an der Korrelation, Anteil am Beta (jeweils getrennt nach
+    Preis- und Gewichtseffekt) und eigene Korrelation.
+
+    - Die Summe aller Anteile entspricht exakt (Toleranz 1e-9) der Korrelation bzw. dem Beta
+    der Haupttabelle für dieselbe Aktie.
+
+    - Angezeigt werden die Top 20 Komponenten nach Betrag des Anteils, eine Zeile „Übrige"
+    und eine Summenzeile.
+
+    - Ein Hinweistext erklärt, dass bei wenigen Index-Tagen der Zufall eine große Rolle spielt;
+    es werden keine p-Werte je Komponente angezeigt.
+
+    - Mindest-Ausschlag (min_change) und Lückenregel (max. 5 Tage) gelten identisch zur Haupttabelle.
+
+    - Funktioniert für gespeicherte Indizes und für ungespeicherte Index-Entwürfe (Vorschau,
+    DB unverändert).
+
+    - Jeder Aufruf wird geloggt (Index, Aktie, Anzahl Komponenten, Dauer).
+
+    - Bestehende Funktionen (Korrelationstabelle, Aktien-Detailansicht, Trades) bleiben unverändert
+    erhalten.
+
+    Testumfang:
+
+    - Preiseffekt plus Gewichtseffekt aller Komponenten ergeben je Tag exakt ΔI, auch bei
+    Ein- und Austritten von Märkten.
+
+    - Die Anteile an Korrelation und Beta ergeben in Summe den Gesamtwert der Haupttabelle.
+
+    - Bei konstanten Gewichten ist der Gewichtseffekt 0.
+
+    - Ein neu in den Index aufgenommener Markt landet am Eintrittstag vollständig im Gewichtseffekt.
+
+    - Ein Index mit nur einer Komponente ergibt 100 % Anteil für diese Komponente.
+
+    - Randfall: weniger als 10 Beobachtungen liefert keine Anteile (wie Haupttabelle), ohne
+    Fehler.
+
+    - Randfall: Aktie ohne Kursdaten liefert leeres Ergebnis ohne Fehler.
+
+    - Randfall: Komponente an nur einem Tag im Index wird korrekt berücksichtigt.
+
+    - Top-20-Kappung: Zeile „Übrige" enthält die Summe aller restlichen Anteile.
+
+    - API-Test für gespeicherten Index und für die Vorschau mit ungespeicherter Regel.
+
+    - Bestehende Korrelationstests bleiben grün; keine Live-API-Aufrufe in Tests.'
+- id: disc-1015-1126-bug-in-southern-company-analysie
+  name: Bug in Southern Company analysieren
+  thema: "I assume here is a bug in Souther Company, analyze this \n"
+  model: Standard
+  thinking: standard
+  erstellt: 2026-10-15 11:26
+  bild: .devconsole/discussions/91F9BA50-2705-4F09-9919-B36C1BF6A141.png
+  archiviert: 2026-10-15 11:57
+  ergebnis: 'Ins Ticket übernommen: Signal-Precision mit Schwellenwert in der Korrelations-Übersicht
+    (1015-1157-signal-precision-mit-schwellenwe)
+
+    Anlass: Bei Southern Company wurde ein Bug vermutet. Die Analyse ergab keinen Rechenfehler:
+    Der kleine p-Wert kommt von der Stärke der (negativen) Korrelation, nicht von der Trefferquote.
+    Gewünscht ist zusätzlich eine Accuracy mit Threshold, die misst, wie oft ein Index-Signal
+    am nächsten Handelstag eine Aktienbewegung über einer Schwelle in der erwarteten Richtung
+    auslöst und ob das besser als Zufall ist.
+
+
+    Umfang:
+
+    - Neues Feld „Mindest-Aktienbewegung“ (Standard 1 %) in der Korrelations-Karte neben „Mindest-Veränderung“;
+    wird wie die bestehenden Einstellungen in localStorage gespeichert und als Query-Parameter
+    an GET /indices/{name}/correlation und POST .../correlation/preview übergeben.
+
+    - Signal = Handelstag T mit |ΔI_T| > Mindest-Veränderung (bestehende Logik). Treffer =
+    Rendite am nächsten Tag (bestehende Timing-Logik, kein Look-ahead) über der Mindest-Aktienbewegung
+    in der erwarteten Richtung.
+
+    - Richtung ohne Selbstbetrug: Die erwartete Richtung (mit oder gegen den Index) wird pro
+    Aktie aus der ersten Hälfte der Signal-Tage bestimmt (Vorzeichen der Korrelation dort).
+    Alle neuen Kennzahlen werden nur auf der zweiten Hälfte gemessen (Aufteilung 50/50, chronologisch).
+
+    - Beide Index-Richtungen werden in der Übersicht zusammengefasst (Anstieg → erwartete
+    Richtung, Rückgang → Gegenrichtung).
+
+    - Neue Spalten pro Aktie: Signale (Anzahl im Testteil), Precision (Treffer ÷ Signale),
+    Basisrate (Anteil aller Testtage, an denen die Aktie ohnehin über der Schwelle in die
+    jeweils erwartete Richtung ging), Lift (Precision ÷ Basisrate), p (Signal) als einseitiger
+    Binomialtest der Treffer gegen die Basisrate.
+
+    - Unter 15 Signalen im Testteil zeigt die Zeile „zu wenig Daten“ statt Precision, Lift
+    und p.
+
+    - Eigene Markierung, wenn p (Signal) unter der Bonferroni-Schwelle (0,05 ÷ getestete Aktien)
+    liegt.
+
+    - Die neuen Spalten sind sortierbar wie die bestehenden.
+
+    - Detailansicht (Klick auf eine Aktie): Robustheits-Matrix mit der Precision und Signal-Anzahl
+    für Index-Schwelle 0,5 / 1 / 2 Punkte × Aktien-Schwelle 0,5 / 1 / 2 %, dazu ein Hinweis,
+    dass die beste Zelle nicht nachträglich ausgewählt werden darf.
+
+    - Nebenbei: Bei der Trefferquote „(40 von 61)“ statt „(40)“ anzeigen. Bei negativer Korrelation
+    zusätzlich die Gegenquote zeigen (z. B. „38 % · gegenläufig 62 %“).
+
+    - Logging: Änderung der Mindest-Aktienbewegung (Frontend-Event), pro Korrelationslauf
+    die Gesamtzahl der Signale und die Zahl der Aktien unter der Mindestzahl an Signalen (Backend).
+
+    - Bestehende Spalten, Kennzahlen und API-Felder bleiben unverändert; die neuen Felder
+    kommen nur hinzu.
+
+    Definition of Done:
+
+    - Die Korrelations-Übersicht zeigt die Spalten Signale, Precision, Basisrate, Lift und
+    p (Signal) für jede getestete Aktie.
+
+    - Das Feld „Mindest-Aktienbewegung“ ist vorhanden, steht standardmäßig auf 1 %, wird gespeichert
+    und löst bei Änderung eine Neuberechnung aus.
+
+    - Die erwartete Richtung wird nur aus der ersten Hälfte bestimmt, die Kennzahlen nur auf
+    der zweiten Hälfte berechnet.
+
+    - Bei weniger als 15 Signalen im Testteil steht „zu wenig Daten“.
+
+    - Liegt p (Signal) unter der Bonferroni-Schwelle, ist das sichtbar markiert.
+
+    - Die Detailansicht einer Aktie zeigt die 3×3-Robustheits-Matrix mit Precision und Signal-Anzahl
+    samt Hinweistext.
+
+    - Die Trefferquote zeigt „(Ereignisse von n)“, bei negativer Korrelation zusätzlich die
+    Gegenquote.
+
+    - Änderungen der Schwelle und die Signal-Zahlen pro Lauf erscheinen im Log.
+
+    - Alle bestehenden Tests sind grün, bestehende Felder der Correlation-API sind unverändert.
+
+    - Changelog.md und Requirements.log sind aktualisiert.
+
+    Testumfang:
+
+    - Precision, Basisrate und Lift auf festen Beispieldaten entsprechen den von Hand nachgerechneten
+    Werten.
+
+    - Binomialtest liefert für bekannte Fälle den erwarteten p-Wert (z. B. 25 von 40 bei Basisrate
+    0,5 → einseitig ≈ 0,077).
+
+    - Zeitaufteilung: Die Richtung wird nur aus der ersten Hälfte bestimmt;'
 - id: disc-0922-1729-eingesetzte-technologien-klaren
   name: Eingesetzte Technologien klären
   thema: 'what technology are we using in this website? '
@@ -78,70 +689,6 @@
 
     - Frontend-Test: Schlaegt POST /logs fehl, bleibt die Oberflaeche bedienbar und es erscheint
     keine Fehlermeldung fuer den Nutzer'
-- id: disc-0919-1818-app-absturz
-  name: App-Absturz
-  thema: Why did the app crash?
-  model: Standard
-  thinking: standard
-  erstellt: 2026-09-19 18:18
-  ergebnis: 'Ins Ticket übernommen: Marktdaten-Abruf nicht mehr unter dem Cache-Lock ausführen
-    (bug-0919-1827-marktdaten-abruf-nicht-mehr-unte)
-
-    MarketCache.get hält das Lock während des gesamten externen Abrufs (bis zu 30 Seiten sequenziell,
-    je 10 s Timeout). Jede andere Anfrage (zweiter Index, /tags, Vorschau) wartet solange;
-    das Dashboard wirkt eingefroren. „Aktualisieren“ mit ungespeicherten Änderungen erzwingt
-    zudem jedes Mal einen kompletten Neuabruf.
-
-
-    Umfang:
-
-    - Der externe Abruf läuft außerhalb des Locks; das Lock schützt nur den Zustand (Snapshot,
-    Zeitstempel, laufender Abruf).
-
-    - Läuft bereits ein Abruf, warten weitere Anfragen auf dessen Ergebnis statt einen zweiten
-    Abruf zu starten (Single-Flight).
-
-    - Liegt ein Snapshot vor und ist er abgelaufen, wird er sofort zurückgegeben und der Neuabruf
-    läuft im Hintergrund (Stale-while-revalidate). Nur ohne Snapshot wird gewartet.
-
-    - force=True (Aktualisieren) startet einen Neuabruf, falls keiner läuft, und wartet auf
-    dessen Ergebnis; ein bereits laufender Abruf wird wiederverwendet.
-
-    - Ein Gesamt-Zeitbudget für den Abruf aller Quellen (Konstante, Standard 60 s); nach Ablauf
-    werden die bis dahin geladenen Märkte verwendet und eine Warnung geloggt.
-
-    - Bestehende Schnittstelle MarketCache.get(force) und clear() bleibt erhalten; API und
-    Dashboard unverändert.
-
-    Definition of Done:
-
-    - Während ein Abruf läuft, liefert get() mit vorhandenem Snapshot sofort den alten Snapshot
-    zurück.
-
-    - Zwei gleichzeitige Aufrufe ohne Snapshot lösen genau einen Abruf des Loaders aus.
-
-    - get(force=True) liefert den frischen Snapshot; ein parallel laufender Abruf wird nicht
-    verdoppelt.
-
-    - Überschreitet der Abruf das Zeitbudget, werden die bisher geladenen Märkte übernommen
-    und eine Warnung geloggt.
-
-    - Bestehende Tests für Cache, API und Dashboard bleiben grün.
-
-    - Alle Dateien unter 500 Zeilen; Changelog.md und Requirements.log aktualisiert.
-
-    Testumfang:
-
-    - Test: Abgelaufener Snapshot wird bei laufendem Abruf sofort zurückgegeben (Loader blockiert
-    über Event).
-
-    - Test: Zwei parallele get()-Aufrufe ohne Snapshot rufen den Loader genau einmal auf.
-
-    - Test: get(force=True) wartet auf den Neuabruf und liefert das neue Ergebnis.
-
-    - Test: Zeitbudget überschritten (gefakte Uhr) führt zu Teilergebnis plus Warnung im Log.
-
-    - Test: clear() verwirft Snapshot; nächster get() lädt neu.'
 - id: disc-0919-1621-metriken-erweitern
   name: Metriken erweitern
   thema: 'Hier sind nur wenige Metriken drin, wie können wir erweitern? '

@@ -78,51 +78,15 @@ def test_preview_rejects_invalid_values(client, override):
     assert api.post("/indices/economics/preview", json={**RULE, **override}).status_code == 400
 
 
-# ---- update ---------------------------------------------------------------------
+# ---- archive: read only (1015-2157), but deletable (1015-2231-indizes-loschen-konnen) ---
 
-def test_put_persists_rule(client):
+def test_archive_refuses_update_and_create(client):
     api, session = client
-    res = api.put("/indices/economics", json={**RULE, "keywords": [" Fed ", "fed", "", "rate"]})
-
-    assert res.status_code == 200
-    assert res.json()["keywords"] == ["Fed", "rate"]  # trimmed, de-duplicated
-    rule = get_rule(session, "economics")
-    assert rule.categories == ["Economics"] and rule.keywords == ["Fed", "rate"]
-    assert [r["keywords"] for r in api.get("/indices").json() if r["index_name"] == "economics"] == [["Fed", "rate"]]
-
-
-def test_put_unknown_index_404_and_invalid_values_400(client):
-    api, _ = client
+    assert api.put("/indices/economics", json=RULE).status_code == 409
     assert api.put("/indices/missing", json=RULE).status_code == 404
-    assert api.put("/indices/economics", json={**RULE, "min_liquidity": 100}).status_code == 400
-
-
-# ---- create / delete ------------------------------------------------------------
-
-def test_post_creates_index_and_rejects_duplicates(client):
-    api, session = client
-    res = api.post("/indices", json={"index_name": " sports ", **RULE, "categories": ["Sports"]})
-
-    assert res.status_code == 201
-    assert res.json()["index_name"] == "sports"
-    assert get_rule(session, "sports").categories == ["Sports"]
-    assert [m["external_id"] for m in api.get("/indices/sports").json()["markets"]] == ["d"]
     assert api.post("/indices", json={"index_name": "sports", **RULE}).status_code == 409
-
-
-@pytest.mark.parametrize("body", [{"index_name": "   ", **RULE}, {"index_name": "x", **RULE, "max_price": 2}])
-def test_post_rejects_invalid_input(client, body):
-    api, _ = client
-    assert api.post("/indices", json=body).status_code == 400
-
-
-def test_delete_removes_index(client):
-    api, session = client
-    assert api.delete("/indices/political").status_code == 204
-    assert get_rule(session, "political") is None
-    assert api.get("/indices/political").status_code == 404
-    assert [r["index_name"] for r in api.get("/indices").json()] == ["economics"]
-    assert api.delete("/indices/political").status_code == 404
+    assert get_rule(session, "political") is not None and get_rule(session, "sports") is None
+    assert get_rule(session, "economics").keywords == ["fed"]
 
 
 # ---- tags ------------------------------------------------------------------------
@@ -140,24 +104,13 @@ def test_tag_counts_ignores_missing_tags():
 
 # ---- dashboard -------------------------------------------------------------------
 
-def test_dashboard_serves_parameter_panel(client):
+def test_dashboard_shows_the_archive_rules_read_only(client):
     api, _ = client
     html = api.get("/").text
-    for element_id in ("params", "keyword-chips", "tag-list", "min-liquidity", "min-price", "max-price",
-                       "dirty-badge", "save-rule", "discard-rule", "new-index", "delete-index", "delete-confirm"):
-        assert f'id="{element_id}"' in html
-    assert "ungespeicherte Änderungen" in html
-    assert "mindestens 10 000 USD" in html
-    assert '/static/params.js' in html and '/static/style.css' in html
-
-
-def test_dashboard_scripts_are_served_and_call_the_endpoints(client):
-    api, _ = client
-    js = api.get("/static/params.js")
-    assert js.status_code == 200
-    assert '"/preview"' in js.text and 'method: "PUT"' in js.text
-    assert 'method: "DELETE"' in js.text and 'fetch("/indices", { method: "POST"' in js.text
-    assert 'fetch("/tags")' in js.text
+    aside = html[html.index('<aside class="ib-side">'):html.index("</aside>")]
+    assert 'id="rule-summary"' in aside and "Archiv, nur lesbar" in aside
+    for element_id in ("keyword-chips", "tag-list", "min-liquidity", "min-price", "max-price", "save-rule", "delete-index"):
+        assert f'id="{element_id}"' not in html
+    assert api.get("/static/params.js").status_code == 404 and '/static/style.css' in html
     assert api.get("/static/style.css").status_code == 200
-    html = api.get("/").text
-    assert '"index-loaded"' in html  # panel syncs with the selected index
+    assert '"index-loaded"' in api.get("/static/indices.js").text + api.get("/static/builder.js").text

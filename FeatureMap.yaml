@@ -1,5 +1,895 @@
 # FeatureMap.yaml — Feature-Register (verwaltet von DevConsole)
 # Status: idee | geplant | in-arbeit | umgesetzt | abgeloest
+- id: 1016-1007-median-liquiditat-als-anhaltpunk
+  name: Median-Liquidität als Anhaltpunkt für Liqi-Filter
+  status: umgesetzt
+  beschreibung: wir brauchen einen Anhaltpunkt für den Filter. Zeige, wo der Median der aktuellen
+    Märkte bei der Liqi liegt. Der Liqi filter wirkt nur am aktuellen Rand, nicht hhistporisch
+  testdateien:
+  - backend/tests/test_liquidity_median.py
+  screenshot: .devconsole/features/1016-1007-median-liquiditat-als-anhaltpunk.png
+- id: 1016-0946-auswahlwerte-fur-eingabefelder-b
+  name: Auswahlwerte für Eingabefelder bereitstellen
+  status: umgesetzt
+  beschreibung: hier sollten ein paar übliche Werte zur Auswahl stehen
+  testdateien:
+  - backend/tests/test_liquidity_presets.py
+  screenshot: .devconsole/features/1016-0946-auswahlwerte-fur-eingabefelder-b.png
+- id: 1016-0005-metriken-auswahlen
+  name: Metriken auswählen
+  status: umgesetzt
+  beschreibung: Let me select metrics
+  testdateien:
+  - backend/tests/test_metric_select.py
+  - backend/tests/test_metric_create.py
+  screenshot: .devconsole/features/1016-0005-metriken-auswahlen.png
+- id: 1015-2355-liquidity-in-alle-metriken-einba
+  name: Liquidity in alle Metriken einbauen
+  status: umgesetzt
+  beschreibung: Wir müssen bei allen Metriken auch Liquidity mit einbauen. Metriken werden
+    zB über Liquidity gefiltert
+  testdateien:
+  - backend/tests/test_metric_liquidity.py
+  - backend/tests/test_eui_api.py
+  screenshot: .devconsole/features/1015-2355-liquidity-in-alle-metriken-einba.png
+- id: 1015-2351-custom-metrics-creation-in-metri
+  name: Custom metrics creation in Metrics section
+  status: umgesetzt
+  beschreibung: 'In the Metrics section, I want to be able to build new metrics. '
+  testdateien:
+  - backend/tests/test_metric_create.py
+  - backend/tests/test_eui_api.py
+  screenshot: .devconsole/features/1015-2351-custom-metrics-creation-in-metri.png
+- id: 1015-2258-more-history-data-than-currently
+  name: More history data than currently available
+  status: umgesetzt
+  beschreibung: 'We should have more history than that '
+  testdateien:
+  - backend/tests/test_more_history.py
+  - backend/tests/test_index_builder.py
+  screenshot: .devconsole/features/1015-2258-more-history-data-than-currently.png
+- id: 1015-2232-zwei-legacy-elemente-entfernen
+  name: Zwei Legacy-Elemente entfernen
+  status: umgesetzt
+  beschreibung: remove these two, this is legacy
+  testdateien:
+  - backend/tests/test_dashboard.py
+  - backend/tests/test_eui_api.py
+  - backend/tests/test_manufacture_sorting.py
+  - backend/tests/test_field_docs.py
+  - backend/tests/test_index_builder.py
+  - backend/tests/test_metric_index_builder.py
+  screenshot: .devconsole/features/1015-2232-zwei-legacy-elemente-entfernen.png
+- id: 1015-2231-indizes-loschen-konnen
+  name: Indizes löschen können
+  status: umgesetzt
+  beschreibung: I need to be able to delete indices as well
+  testdateien:
+  - backend/tests/test_index_delete.py
+  - backend/tests/test_index_params.py
+  - backend/tests/test_metric_index_builder.py
+  screenshot: .devconsole/features/1015-2231-indizes-loschen-konnen.png
+- id: 1015-2231-regression-index-und-bestandteil
+  name: Regression Index und Bestandteile → Aktienrendite am nächsten Tag für Metrik-Indizes
+  status: umgesetzt
+  beschreibung: 'Ursache: Die Aktien-Auswertung (Korrelation, Signal-Precision, Aktien-Detail
+    mit Trades, Attribution) hängt nur am regelbasierten Archiv-Index (IndexRule); metricindex.js:84
+    setzt state.name = null, daher bleibt sie bei Metrik-Indizes (z. B. „Fed Rates“) inaktiv.
+
+    Umfang:
+
+    1. Bestehende Werkzeuge (Korrelationstabelle Top 100, Signal-Precision, Aktien-Detail
+    mit Chart und Trades) auch für Metrik-Indizes anbinden. Archiv-Indizes bleiben unverändert.
+
+    2. Zeitlogik wie bisher, ohne Lookahead: Änderung von Tag T (vor US-Close) gepaart mit
+    der Rendite von Close T bis Close am nächsten Handelstag; PIT-Prüfung (quality.pit) gilt
+    weiter.
+
+    3. Einheit des Gesamtindex sind z-Punkte: Steigung, Mindest-Veränderung (min_change) und
+    Beschriftungen entsprechend umstellen.
+
+    4. Zwei Regressionen nebeneinander:
+
+    - Einfach: ΔIndex (z) → Rendite.
+
+    - Mehrfach: Tagesänderung jeder Metrik in Roheinheit (z. B. bp) als eigener Regressor
+    → Rendite; je Bestandteil Koeffizient und p-Wert, dazu gemeinsamer F-Test und R².
+
+    - Warnhinweis bei stark korrelierten Bestandteilen (Multikollinearität, z. B. Korrelation
+    der Regressoren bzw. VIF über Schwelle).
+
+    - Ersetzt bei Metrik-Indizes die alte Markt-Attribution.
+
+    5. Zielgröße umschaltbar: Überrendite gegenüber dem Markt (Voreinstellung) oder rohe Rendite;
+    Markt = gleichgewichteter Schnitt der Top 100.
+
+    6. Gesamtmarkt (Schnitt Top 100) als eigene, oberste Zeile ausgewertet, immer mit roher
+    Rendite.
+
+    7. Mehrfachtests: erwartete Zufallstreffer und Bonferroni-Schwelle wie bisher, auch für
+    die Regression.
+
+    8. Logging: jeder Aufruf (Index, Zeitraum, Zielgröße, Anzahl Tage/Aktien, signifikante
+    Treffer) und jeder Klick (Zielgröße umschalten, Aktie öffnen) im app.log.'
+  kriterien:
+  - „Fed Rates“ zeigt die Tabelle mit Gesamtmarkt-Zeile plus 100 Aktien.
+  - Einfache und mehrfache Regression werden nebeneinander angezeigt, inklusive Koeffizienten,
+    p-Werten, F-Test und R².
+  - Schalter Überrendite/rohe Rendite funktioniert, Voreinstellung ist Überrendite.
+  - Bei stark korrelierten Bestandteilen erscheint ein sichtbarer Warnhinweis.
+  - Steigung und Mindest-Veränderung sind bei Metrik-Indizes in z-Punkten beschriftet und
+    gerechnet.
+  - Aktien-Detail mit Chart und Trades öffnet sich auch bei Metrik-Indizes.
+  - Archiv-Indizes funktionieren exakt wie vorher.
+  - Aufrufe und Klicks sind im app.log nachvollziehbar.
+  - Requirements.log, Changelog.md aktualisiert; alle Tests grün, ohne Live-API-Aufrufe und
+    ohne lokale Dateien.
+  tests:
+  - 'Zeitlogik: Paare nutzen nur Index-/Metrikwerte bis Tag T und die Rendite Close T → Close
+    nächster Handelstag; keine Paare über Datenlücken > MAX_GAP_DAYS.'
+  - Einfache Regression liefert auf synthetischen Daten mit bekannter Steigung den erwarteten
+    Koeffizienten und p-Wert.
+  - Mehrfache Regression liefert auf synthetischen Daten mit zwei bekannten Koeffizienten
+    die erwarteten Werte, F-Test und R².
+  - 'Multikollinearität: zwei nahezu identische Regressoren lösen den Warnhinweis aus, unabhängige
+    nicht.'
+  - 'Überrendite: Aktie minus gleichgewichteter Top-100-Schnitt wird korrekt berechnet; Gesamtmarkt-Zeile
+    nutzt rohe Rendite.'
+  - Bonferroni-Schwelle und erwartete Zufallstreffer stimmen mit der Anzahl getesteter Aktien
+    überein.
+  - Endpunkt für Metrik-Index gibt 200 mit vollständiger Struktur; unbekannter Index gibt
+    404.
+  - 'Regressionstest: Korrelations- und Attribution-Endpunkte der Archiv-Indizes liefern unveränderte
+    Ergebnisse.'
+  - 'PIT: provisorische oder zukunftsdatierte Kurse und Snapshots fließen nicht ein.'
+  testdateien:
+  - backend/tests/test_metric_regression.py
+  - backend/tests/test_stock_correlation.py
+  screenshot: .devconsole/features/1015-2231-regression-index-und-bestandteil.png
+- id: 1015-2157-index-builder-nur-aus-validierte
+  name: Index-Builder nur aus validierten Metriken
+  status: umgesetzt
+  beschreibung: 'Der Index-Builder bietet ausschließlich Metriken mit Status validated zur
+    Auswahl an. Die bisherige Regel-Auswahl (Tags, Keywords, Liquiditätsfilter, Preis-Korridor)
+    entfällt im Builder (ersetzt Requirements #4, #11, #25 → superseded).
+
+    Ein Index besteht aus einer oder mehreren validierten Metriken mit Gewichten; Metriken
+    unterschiedlicher Einheiten (bp, Wahrscheinlichkeit) werden für die Indexberechnung standardisiert.
+
+    Wird eine Metrik eines bestehenden Index später gesperrt (blocked), rechnet der Index
+    weiter, zeigt aber eine deutliche Warnung; neue Indizes mit dieser Metrik sind nicht möglich.
+
+    Bestehende regelbasierte Indizes bleiben als „Archiv, nur lesbar“ erhalten (Wertentwicklung
+    und Bestandteile sichtbar, nicht mehr bearbeitbar), nichts wird gelöscht.
+
+    Index Manufacture (#17): Katalog und KI-Vorschläge bleiben; „Als Index veröffentlichen“
+    wird zu „Als Metrik-Entwurf anlegen“ (Status draft).'
+  kriterien:
+  - Builder zeigt in der Auswahl nur validierte Metriken; draft und blocked erscheinen nicht
+  - Backend lehnt das Speichern eines Index mit nicht validierter Metrik mit 400/409 ab
+  - Regel-Felder (Tags, Keywords, Liquidität, Preis-Korridor) sind aus dem Builder entfernt
+  - Bestehende regelbasierte Indizes sind als Archiv sichtbar und nicht bearbeitbar
+  - Index mit nachträglich gesperrter Metrik rechnet weiter und zeigt eine sichtbare Warnung
+  - Index Manufacture legt statt eines Index einen Metrik-Entwurf (draft) an
+  - Alle Auswahl-, Speicher- und Warnereignisse stehen in app.log
+  - 'Requirements.log: #4, #11, #25 auf superseded mit Verweis, #17 angepasst; Changelog.md
+    aktualisiert'
+  tests:
+  - Auswahl-Endpunkt des Builders liefert nur validierte Metriken
+  - Speichern eines Index mit draft- oder blocked-Metrik wird abgelehnt
+  - Index aus zwei validierten Metriken mit unterschiedlichen Einheiten liefert standardisierten
+    Indexwert
+  - Sperre einer Metrik → bestehender Index liefert weiter Werte plus Warnflag
+  - Archiv-Index ist abrufbar, Bearbeiten (PUT) wird abgelehnt
+  - Index Manufacture „Als Metrik-Entwurf anlegen“ erzeugt eine Metrik mit Status draft
+  testdateien:
+  - backend/tests/test_metric_index_builder.py
+  - backend/tests/test_index_params.py
+  - backend/tests/test_index_builder.py
+  - backend/tests/test_manufacture_api.py
+  - backend/tests/test_api.py
+  gruppe: grp-1015-2157-0ed0
+  rang: 2
+- id: 1015-2157-metrik-katalog-mit-prufungen-und
+  name: Metrik-Katalog mit Prüfungen und Freigabe (validated metrics)
+  status: umgesetzt
+  beschreibung: 'Neuer Metrik-Katalog als eigene Übersicht. Eine Metrik ist eine tägliche
+    Zeitreihe mit fester Definition (Name, Einheit, Quelle, Berechnung).
+
+    Status je Metrik: draft (nicht geprüft), validated (alle automatischen Prüfungen grün
+    UND manuell freigegeben), blocked (eine Prüfung fällt durch → automatische Sperre).
+
+    Automatische Prüfungen: kein Lookahead (Info von Tag X nie an anderem Tag), Mindestabdeckung
+    (Anteil fehlender Tage unter Schwelle), keine Roll-Sprünge (nur verkettete Reihen), Plausibilität
+    zwischen Kalshi und Polymarket (Abweichung unter Schwelle).
+
+    Übersicht zeigt je Metrik: Status, Prüfergebnisse, Chart, Freigabedatum; Knöpfe „Freigeben“
+    (nur aktiv, wenn alle Prüfungen grün) und „Sperren“.
+
+    Erste Metriken: „Fed Front-Kette, verkettet (bp)“ und „Fed Zweit-Kette, verkettet (bp)“
+    auf Basis der sprungfreien linked-Reihe aus backend/app/fed/metrics.py.
+
+    Prüfungen laufen bei jedem Datennachladen erneut; Statuswechsel, Freigaben, Sperren und
+    Prüfergebnisse werden in app.log protokolliert.
+
+    Bestehende Funktionen (Fed-Zinsketten-Sicht, Datenqualität) bleiben unverändert.'
+  kriterien:
+  - Neue Ansicht „Metriken“ listet alle Metriken mit Status, Prüfergebnissen, Chart und Freigabedatum
+  - Die beiden Fed-Metriken (Front und Zweit, verkettet) sind im Katalog vorhanden und nutzen
+    die linked-Reihe ohne Roll-Sprünge
+  - „Freigeben“ ist nur bei vollständig grünen Prüfungen möglich (Backend lehnt sonst mit
+    409 ab)
+  - Fällt eine Prüfung bei einer validierten Metrik durch, wechselt sie automatisch auf blocked
+  - Status, Freigabe und Sperre werden in der Datenbank per Migration gespeichert und überleben
+    einen Neustart
+  - Jeder Klick, jede Freigabe, Sperre und jeder automatische Statuswechsel steht in app.log
+  - Changelog.md und Requirements.log sind aktualisiert
+  tests:
+  - Metrik mit allen grünen Prüfungen lässt sich freigeben → Status validated
+  - Freigabe einer Metrik mit roter Prüfung wird mit 409 abgelehnt
+  - Validierte Metrik mit neu auftretender Datenlücke über Schwelle → automatisch blocked
+  - Verkettete Fed-Reihe zeigt am Roll-Tag keinen Sprung (Fixture mit zwei Sitzungen unterschiedlicher
+    Erwartung)
+  - Lookahead-Prüfung schlägt bei einem Wert nach dem Entscheidungszeitpunkt am Sitzungstag
+    an
+  - Plausibilitätsprüfung schlägt bei großer Abweichung Kalshi vs. Polymarket an
+  - Metrik-Übersicht-Endpunkt liefert Status und Prüfergebnisse aller Metriken
+  testdateien:
+  - backend/tests/test_metric_catalog.py
+  - backend/tests/test_metric_catalog_ui.py
+  screenshot: .devconsole/features/1015-2157-metrik-katalog-mit-prufungen-und.png
+  gruppe: grp-1015-2157-0ed0
+  rang: 1
+- id: 1015-2147-x-achse-anzeigen
+  name: X-Achse anzeigen
+  status: umgesetzt
+  beschreibung: Show the x-axis
+  testdateien:
+  - backend/tests/test_fed_chart_axis.py
+  screenshot: .devconsole/features/1015-2147-x-achse-anzeigen.png
+- id: 1015-2120-frontend-buttons-und-fehleranzei
+  name: Frontend-Buttons und Fehleranzeige (Fed-Zinsketten)
+  status: umgesetzt
+  beschreibung: 'Zwei Buttons "Abrufen -> Staging" und "Staging -> Raw" im Bereich Fed-Zinsketten,
+    die die Befehle aus Teil 2 auslösen.
+
+    Klicks werden im app.log protokolliert.
+
+    Bei Fehlern zeigt das Frontend die Meldung des Servers statt nur "HTTP 500".
+
+
+    (Teil 3/3 von „Staging-Ordner und idempotenter Raw-Layer in SQLite (Pilot: Fed-Zinsketten)“,
+    1015-2119-staging-ordner-und-idempotenter)
+
+    Alle Teile in Reihenfolge:
+
+    1. Schema-Auto-Migration, Fehler-Logging und /health
+
+    2. Staging- und Raw-Layer mit Idempotenz (Fed-Zinsketten)
+
+    3. Frontend-Buttons und Fehleranzeige (Fed-Zinsketten) ← dieses Ticket
+
+    Setze NUR diesen Teil um und greife späteren Teilen nicht vor.'
+  kriterien:
+  - Beide Buttons sind im Bereich Fed-Zinsketten sichtbar
+  - Jeder Klick erscheint im app.log
+  - Fehlerantwort des Servers wird im Frontend mit Text angezeigt
+  - Nach erfolgreichem Lauf lädt der zweite Klick auf "Staging -> Raw" 0 Dateien
+  tests:
+  - 'Rendering: beide Buttons vorhanden'
+  - Klick löst Anfrage aus und wird geloggt
+  - 'Server antwortet 500 mit Meldung: Meldungstext erscheint im UI'
+  - 'Erfolgreicher Lauf: Anzeige zeigt gefunden / neu / übersprungen / fehlgeschlagen'
+  testdateien:
+  - backend/tests/test_fed_staging_ui.py
+  gruppe: grp-1015-2120-ac1f
+  rang: 3
+  teilVon: 1015-2119-staging-ordner-und-idempotenter
+- id: 1015-2120-staging-und-raw-layer-mit-idempo
+  name: Staging- und Raw-Layer mit Idempotenz (Fed-Zinsketten)
+  status: umgesetzt
+  beschreibung: 'Abruf schreibt API-Antworten unverändert nach data/staging/<quelle>/<datensatz>/<datum>/
+    inkl. Abrufzeit und URL. Dateien werden nie überschrieben, identischer Inhalt zur letzten
+    Datei wird nicht erneut geschrieben.
+
+    Staging -> Raw lädt neue Dateien 1:1 in Raw-Tabellen (Inhalt, Quelle, Datensatz, Abrufzeit,
+    Prüfsumme) und führt ein Ladeprotokoll.
+
+    Eindeutigkeitsregeln liegen in der DB (Migration). Einfügen überspringt Vorhandenes still,
+    pro Datei gilt alles oder nichts.
+
+    Fehlerhafte Staging-Dateien werden protokolliert und übersprungen.
+
+    Beide Schritte als getrennte CLI-Befehle. data/ wird in .gitignore eingetragen.
+
+
+    (Teil 2/3 von „Staging-Ordner und idempotenter Raw-Layer in SQLite (Pilot: Fed-Zinsketten)“,
+    1015-2119-staging-ordner-und-idempotenter)
+
+    Alle Teile in Reihenfolge:
+
+    1. Schema-Auto-Migration, Fehler-Logging und /health
+
+    2. Staging- und Raw-Layer mit Idempotenz (Fed-Zinsketten) ← dieses Ticket
+
+    3. Frontend-Buttons und Fehleranzeige (Fed-Zinsketten)
+
+    Setze NUR diesen Teil um und greife späteren Teilen nicht vor.'
+  kriterien:
+  - Abruf schreibt Antworten unverändert nach data/staging/<quelle>/<datensatz>/<datum>/ und
+    überschreibt nie eine Datei
+  - Identischer Abruf erzeugt keine zweite Datei, geänderter Inhalt erzeugt eine neue
+  - data/ ist in .gitignore eingetragen
+  - Ladeschritt bringt neue Staging-Dateien 1:1 in die Raw-Tabellen, ein zweiter Lauf lädt
+    0 Dateien
+  - Raw-Tabellen und Ladeprotokoll haben Eindeutigkeitsregeln in der DB (Migration vorhanden)
+  - Wiederholte und parallele Läufe ergeben denselben Datenbestand ohne Duplikate
+  - Abbruch mitten im Lauf hinterlässt keine halben Daten, der nächste Lauf setzt fort
+  - Fehlerhafte Datei wird protokolliert und übersprungen, der Lauf läuft weiter
+  - Jeder Lauf loggt gefunden / neu / übersprungen / fehlgeschlagen
+  - Bestehende Fed-Sicht (Abdeckung, Ketten, Prüfungen) und alle Tests bleiben grün
+  tests:
+  - 'Abruf mit Fixture zweimal: eine Staging-Datei, Inhalt unverändert'
+  - 'Abruf mit geändertem Inhalt: zweite Datei entsteht, erste bleibt unverändert'
+  - 'Ladeschritt zweimal: beim zweiten Lauf 0 neue Zeilen'
+  - Doppeltes Einfügen derselben Prüfsumme wird von der DB abgewiesen bzw. übersprungen
+  - 'Abbruch mitten in einer Datei: keine Teilzeilen in der Raw-Tabelle'
+  - 'Zwei parallele Ladeläufe: Datenbestand identisch, keine Duplikate'
+  - 'Kaputte Staging-Datei: Protokolleintrag, übrige Dateien werden geladen'
+  testdateien:
+  - backend/tests/test_staging_raw.py
+  - backend/tests/test_fed_raw_layer.py
+  - backend/tests/test_fed_chains.py
+  - backend/tests/test_migration.py
+  - backend/tests/test_schema_state.py
+  gruppe: grp-1015-2120-ac1f
+  rang: 2
+  teilVon: 1015-2119-staging-ordner-und-idempotenter
+- id: 1015-2120-schema-auto-migration-fehler-log
+  name: Schema-Auto-Migration, Fehler-Logging und /health
+  status: umgesetzt
+  beschreibung: 'Schema vor dem Start automatisch auf head migrieren (Python-Start und start_dev.sh),
+    bestehende dev.db-Daten bleiben erhalten.
+
+    API loggt den Schema-Stand beim Start; /health meldet ein veraltetes Schema.
+
+    Unbehandelte Exceptions werden als Status 500 mit Request-Zeile und Traceback in app.log
+    geschrieben.
+
+    Dieser Teil kommt zuerst, weil Fehler danach sichtbar sind und die Migration die Voraussetzung
+    für Teil 2 ist.
+
+
+    (Teil 1/3 von „Staging-Ordner und idempotenter Raw-Layer in SQLite (Pilot: Fed-Zinsketten)“,
+    1015-2119-staging-ordner-und-idempotenter)
+
+    Alle Teile in Reihenfolge:
+
+    1. Schema-Auto-Migration, Fehler-Logging und /health ← dieses Ticket
+
+    2. Staging- und Raw-Layer mit Idempotenz (Fed-Zinsketten)
+
+    3. Frontend-Buttons und Fehleranzeige (Fed-Zinsketten)
+
+    Setze NUR diesen Teil um und greife späteren Teilen nicht vor.'
+  kriterien:
+  - Start der API migriert dev.db auf head, bestehende Zeilen bleiben erhalten
+  - start_dev.sh führt die Migration vor dem Serverstart aus
+  - Beim Start steht der Schema-Stand in app.log
+  - /health meldet bei veraltetem Schema einen Hinweis
+  - Unbehandelte Exception erzeugt in app.log einen Eintrag mit Request-Zeile, Status 500
+    und Traceback
+  tests:
+  - DB auf Revision 0008 mit Testdaten, Start migriert auf head, Testdaten sind danach noch
+    vorhanden
+  - /health bei veralteter Revision meldet Warnung
+  - 'Route wirft Exception: Antwort 500, app.log enthält Traceback und Request-Zeile'
+  - Schema-Stand wird beim Start geloggt
+  testdateien:
+  - backend/tests/test_schema_state.py
+  gruppe: grp-1015-2120-ac1f
+  rang: 1
+  teilVon: 1015-2119-staging-ordner-und-idempotenter
+- id: 1015-2119-staging-ordner-und-idempotenter
+  name: 'Staging-Ordner und idempotenter Raw-Layer in SQLite (Pilot: Fed-Zinsketten)'
+  status: abgeloest
+  beschreibung: 'Auslöser: Beim Nachladen der Fed-Zinsketten scheitern alle 295 Märkte und
+    /quality/fed/coverage liefert HTTP 500. Ursache laut app.log: In backend/dev.db fehlen
+    fed_markets/fed_prices (Migration 0009 nie ausgeführt, kein automatisches Schema-Update).
+    Der 500er erscheint nicht in app.log, weil unbehandelte Exceptions an der Request-Logging-Middleware
+    vorbeilaufen. Der Loader ruft 173 s lang das Netz ab, bevor er beim Speichern scheitert.
+
+    Neuer Aufbau der Datenladung, als Pilot für die Fed-Zinsketten (Kalshi + Polymarket):
+
+    1. Abrufen -> Staging: API-Antworten werden unverändert als Dateien unter data/staging/<quelle>/<datensatz>/<datum>/
+    abgelegt (inkl. Abrufzeitpunkt und URL). Dateien sind unveränderlich, werden nie überschrieben.
+    Identischer Inhalt zur letzten Datei derselben Anfrage wird nicht erneut geschrieben.
+    data/ ist gitignored.
+
+    2. Staging -> Raw: Neue Staging-Dateien werden unverändert in Raw-Tabellen der lokalen
+    SQLite-DB geladen (Inhalt, Quelle, Datensatz, Abrufzeit, Prüfsumme). Ein Ladeprotokoll
+    hält fest, welche Dateien geladen sind.
+
+    3. Idempotenz ist Kernanforderung: Unsere Ladeprozesse dürfen nie Duplikate in der DB
+    erzeugen. Absicherung über Eindeutigkeitsregeln in der DB selbst (nicht nur Code-Prüfung),
+    Einfügen überspringt Vorhandenes still. Identischer Inhalt wird einmal gespeichert (mit
+    Zeitpunkt des ersten Abrufs), geänderter Inhalt ist eine neue Beobachtung und wird gespeichert.
+
+    4. Beide Schritte getrennt als CLI-Befehl und als Button im Bereich Fed-Zinsketten; Schema
+    wird vor dem Laden automatisch auf head migriert (auch in start_dev.sh vor dem Serverstart).
+
+    5. Logging-Lücke schließen: Unbehandelte Fehler mit Status 500 und Traceback in app.log;
+    API loggt beim Start den Schema-Stand, /health meldet veraltetes Schema; Frontend zeigt
+    die Fehlermeldung des Servers statt nur "HTTP 500".
+
+    Bestehende Tabellen fed_markets/fed_prices und die Fed-Sicht bleiben erhalten; deren Befüllung
+    aus dem Raw-Layer sowie weitere Quellen (EUI-Snapshots, Aktienkurse, Backfill, Probe)
+    und eine Spiegelung nach Neon sind eigene Folge-Tickets.'
+  kriterien:
+  - Abruf schreibt API-Antworten unverändert nach data/staging/<quelle>/<datensatz>/<datum>/
+    und überschreibt nie eine vorhandene Datei
+  - Identischer Abruf erzeugt keine zweite Staging-Datei, geänderter Inhalt eine neue
+  - data/ ist in .gitignore eingetragen
+  - Ladeschritt bringt neue Staging-Dateien 1:1 in die Raw-Tabellen; ein zweiter Lauf lädt
+    0 Dateien
+  - Raw-Tabellen und Ladeprotokoll haben Eindeutigkeitsregeln auf ihrem fachlichen Schlüssel
+    in der DB (Migration vorhanden)
+  - Wiederholte und gleichzeitige Läufe ergeben exakt denselben Datenbestand ohne Duplikate
+  - Abbruch mitten im Lauf hinterlässt keine halben Daten (pro Datei alles oder nichts); der
+    nächste Lauf setzt sauber fort
+  - Fehlerhafte Staging-Dateien werden protokolliert und übersprungen, der Lauf läuft weiter
+  - Vor dem Laden und in start_dev.sh wird das DB-Schema automatisch auf den neuesten Stand
+    gebracht; bestehende Daten in dev.db bleiben erhalten
+  - Jeder Lauf loggt gefunden / neu / übersprungen / fehlgeschlagen
+  - Unbehandelte Exceptions erscheinen in app.log mit Request-Zeile (Status 500) und Traceback
+  - API loggt beim Start den Schema-Stand; /health meldet ein veraltetes Schema
+  - Frontend zeigt bei Fehlern die Meldung des Servers statt nur "HTTP 500"
+  - CLI-Befehle und Buttons für "Abrufen -> Staging" und "Staging -> Raw" vorhanden, Klicks
+    werden geloggt
+  - Bestehende Fed-Sicht (Abdeckung, Ketten, Prüfungen) funktioniert unverändert; alle bestehenden
+    Tests grün
+  - Changelog.md, Requirements.log und BugReports.yaml aktualisiert
+  tests:
+  - Abruf mit simulierter Quelle schreibt die erwarteten Staging-Dateien mit unverändertem
+    Inhalt, Abrufzeit und URL
+  - 'Identischer Abruf zweimal: nur eine Staging-Datei; geänderter Inhalt: zwei Dateien'
+  - Laden auf leere DB legt das Schema an und lädt alle Dateien 1:1 in Raw
+  - 'Gleiche Dateien zweimal laden: Zeilenzahl unverändert, "übersprungen" korrekt gezählt'
+  - 'Zwei Läufe auf derselben DB mit überlappenden Dateien: keine Duplikate'
+  - Direktes Einfügen einer doppelten Raw-Zeile wird von der DB abgelehnt
+  - 'Abbruch mitten in einer Datei, danach neuer Lauf: Endstand identisch mit sauberem Durchlauf'
+  - Geänderter Inhalt für denselben Markt erzeugt eine zusätzliche Raw-Zeile, identischer
+    nicht
+  - Kaputte Staging-Datei wird übersprungen und protokolliert, übrige Dateien werden geladen
+  - 'Endpunkt mit Exception: Status 500 und Traceback stehen im Log'
+  - 'Startprüfung mit veralteter Test-DB: Warnung im Log und Hinweis in /health; aktuelle
+    DB: kein Hinweis'
+  - Alle Tests ohne Netz, ohne Live-LLM-Aufrufe und nur mit Beispieldateien aus dem Testordner
+    (CI-tauglich auf frischem Klon)
+  hinweis: 'Aufgeteilt in 3 Tickets (Gruppe grp-1015-2120-ac1f): 1015-2120-schema-auto-migration-fehler-log,
+    1015-2120-staging-und-raw-layer-mit-idempo, 1015-2120-frontend-buttons-und-fehleranzei'
+- id: 1015-2043-fed-zinsketten-raw-layer-erwarte
+  name: 'Fed-Zinsketten: Raw-Layer, erwartete Zinsänderung als Front- und Zweitkette, Sicht
+    in Datenqualität'
+  status: umgesetzt
+  beschreibung: 'Ziel: Zinsindex aus Prognosemärkten mit möglichst langer, sauberer Historie.
+    Bestehende Indizes, Backfill, Korrelation und Datenqualitäts-Ansichten bleiben unverändert.
+
+
+    1. Raw-Layer (eigene Tabellen, getrennt von eui_market_snapshots):
+
+    - Alle Fed-Entscheidungsmärkte (FOMC) von Kalshi und Polymarket laden, auch abgeschlossene,
+    so weit zurück wie die APIs Kurse liefern.
+
+    - Pro Markt: Quelle, externe ID, Sitzungsdatum, Ausgang als Zinsschritt in bp (z. B. -50,
+    -25, 0, +25), Titel, Link.
+
+    - Pro Tag und Ausgang: Preis, Umsatz (falls verfügbar), Abrufzeitpunkt, Herkunft (live/historisch).
+
+    - Append-only: Rohdaten werden nie überschrieben; erneuter Lauf lädt nur Fehlendes nach
+    (idempotent).
+
+    - Point-in-time-Regel wie bisher (quality.pit): kein Tageswert nach US-Börsenschluss des
+    jeweiligen Tages.
+
+    - Startbar per CLI und Endpoint; ein fehlerhafter Markt stoppt den Lauf nicht.
+
+
+    2. Abgeleitete Metrik (Datenebene, aus dem Raw-Layer berechnet):
+
+    - Pro Sitzung und Tag: Wahrscheinlichkeiten der Ausgänge auf 100 % normieren; erwartete
+    Zinsänderung = Summe(Wahrscheinlichkeit × bp).
+
+    - Wahrscheinlichkeitssumme vor Normierung mitspeichern (Qualitätsmerkmal).
+
+    - Reihen getrennt für Kalshi, Polymarket und kombiniert (Mittelwert, wenn beide vorhanden).
+
+    - Zwei Ketten: Front-Kette = jeweils nächste anstehende Sitzung; Zweitkette = jeweils
+    übernächste Sitzung.
+
+    - Nach jeder Entscheidung rollen beide Ketten eine Sitzung weiter (bisherige Zweit-Sitzung
+    wird Front).
+
+    - Am Roll-Tag wird die Tagesänderung nur innerhalb desselben Marktes gemessen (Kettenverknüpfung),
+    der Wechsel erzeugt keinen Sprung.
+
+
+    3. Sicht im Tab "Datenqualität" (neuer Abschnitt "Fed-Zinsketten"):
+
+    - Abdeckung: Zeitbalken pro Sitzung und Quelle, Lücken markiert.
+
+    - Kettenverlauf: Chart von Front- und Zweitkette je Quelle, Roll-Tage markiert.
+
+    - Prüfungen: Wahrscheinlichkeitssumme deutlich ungleich 100 %, fehlende Tage, Abweichung
+    Kalshi vs. Polymarket, Tagessprünge, Werte nach Börsenschluss.
+
+    - Drill-down: Klick auf einen Tag zeigt die Rohwerte je Ausgang, aus denen der Wert entstand.
+
+
+    4. Logging: Laden (Start, Ende, Anzahl Märkte/Zeilen, Fehler je Markt), Berechnung, Roll-Ereignisse,
+    Prüfergebnisse sowie alle Klicks und Eingaben in der neuen Sicht.
+
+
+    Nicht enthalten: Anbindung an die Aktienkorrelation (Folgeticket, sobald die Datenqualität
+    überzeugt).'
+  kriterien:
+  - Raw-Tabellen existieren per Alembic-Migration und enthalten Fed-Märkte beider Quellen
+    inklusive abgeschlossener Sitzungen.
+  - Zweiter Ladelauf ohne neue Daten fügt 0 Zeilen hinzu und ändert keine bestehende Zeile.
+  - Keine Raw-Zeile hat einen Beobachtungszeitpunkt nach dem US-Börsenschluss ihres Tages.
+  - Für jeden Tag mit Daten liegen erwartete Zinsänderung, Rohsumme der Wahrscheinlichkeiten
+    und Quelle je Sitzung vor.
+  - Front- und Zweitkette sind für jeden Tag mit Daten berechnet; Roll-Tage sind gekennzeichnet.
+  - Am Roll-Tag entspricht die Tagesänderung der Kette der Änderung des neuen Front-Marktes
+    gegenüber seinem eigenen Vortageswert.
+  - Tab "Datenqualität" zeigt Abdeckung, Kettenverlauf beider Ketten, Prüfungen und Drill-down
+    auf Rohwerte.
+  - Bestehende Indizes, Backfill, Korrelation und bisherige Datenqualitäts-Ansichten funktionieren
+    unverändert (bestehende Tests grün).
+  - Logging für Laden, Berechnung, Rollen, Prüfungen und UI-Klicks ist vorhanden.
+  - Alle Dateien unter 500 Zeilen; Changelog.md und Requirements.log sind aktualisiert.
+  tests:
+  - 'Parser Kalshi: Fed-Markt-Antwort (Fixture) wird korrekt in Sitzungsdatum, Ausgang in
+    bp und Tagespreise zerlegt.'
+  - 'Parser Polymarket: Fed-Event mit mehreren Ausgängen (Fixture) wird korrekt in Ausgänge
+    mit bp und Tagespreise zerlegt.'
+  - 'Idempotenz: zweiter Ladelauf mit denselben Fixture-Daten fügt keine Zeilen hinzu und
+    überschreibt nichts.'
+  - 'Point-in-time: Kurspunkt nach US-Börsenschluss wird verworfen.'
+  - 'Fehlertoleranz: ein Markt mit fehlerhafter Antwort wird geloggt und übersprungen, die
+    übrigen werden geladen.'
+  - 'Erwartete Zinsänderung: 70 % 0 bp, 25 % -25 bp, 5 % -50 bp ergibt -8,75 bp.'
+  - 'Normierung: Rohsumme 108 % wird auf 100 % normiert und die Rohsumme 1,08 gespeichert.'
+  - 'Kombinierte Reihe: Mittelwert aus Kalshi und Polymarket, nur eine Quelle vorhanden ergibt
+    deren Wert.'
+  - 'Front-Kette: vor Sitzung A zeigt sie A, nach der Entscheidung von A zeigt sie B.'
+  - 'Zweitkette: vor Sitzung A zeigt sie B, nach der Entscheidung von A zeigt sie C.'
+  - 'Roll-Tag: Tagesänderung wird innerhalb des neuen Marktes gemessen, kein Sprung durch
+    den Wechsel.'
+  - 'Prüfungen: Wahrscheinlichkeitssumme außerhalb der Toleranz, fehlender Tag, Quellenabweichung
+    und Tagessprung werden jeweils gemeldet.'
+  - 'API Datenqualität: Endpoints für Abdeckung, Kettenverlauf und Drill-down liefern die
+    erwartete Struktur.'
+  - 'Regression: bestehende Endpoints für Indizes, Historie, Korrelation und Datenqualität
+    liefern unverändert.'
+  testdateien:
+  - backend/tests/test_fed_raw_layer.py
+  - backend/tests/test_fed_chains.py
+- id: 1015-1948-historische-daten-analysieren-un
+  name: Historische Daten analysieren und Lookahead-Bias verbieten
+  status: umgesetzt
+  beschreibung: give me a Tab where we can view analyze the stored data. Especially, we need
+    to make sure that data is clean and properly stored. Look ahead bias must be prohibited
+  testdateien:
+  - backend/tests/test_data_quality.py
+  screenshot: .devconsole/features/1015-1948-historische-daten-analysieren-un.png
+- id: 1015-1200-performance-attribution-je-kompo
+  name: Performance Attribution je Komponente für eine Aktie
+  status: umgesetzt
+  beschreibung: 'In der Aktien-Detailansicht wird angezeigt, welche Komponenten des Index
+    den Zusammenhang „Index-Veränderung → Rendite der Aktie am nächsten Tag" tragen.
+
+    Die Index-Veränderung ΔI je Tag wird exakt auf die Komponenten zerlegt (Index = Σ Gewicht
+    × Preis, Gewicht = 24h-Umsatz-Anteil), jeweils getrennt in Preiseffekt (Gewicht gestern
+    × Preisänderung) und Gewichtseffekt (Gewichtsänderung × Preis heute; Umschichtung inkl.
+    Ein- und Austritte).
+
+    Darauf aufbauend werden Korrelation und Beta der Haupttabelle exakt additiv auf die Komponenten
+    verteilt (Kovarianz-Zerlegung wie bei einer Risiko-Attribution), ebenfalls getrennt nach
+    Preis- und Gewichtseffekt.
+
+    Nur Gesamtsicht über den betrachteten Zeitraum, keine Aufschlüsselung je Tag. Keine Benchmark-Attribution
+    (Brinson gegen Vergleichsindex), keine p-Werte je Komponente.
+
+    Berechnung ausschließlich auf vorhandenen Daten (Markt-Snapshots, Aktienkurse), ohne KI-Aufruf
+    und ohne neue Datenbanktabelle. Erweitert Anforderungen Nr. 26 und Nr. 28.'
+  kriterien:
+  - 'Die Aktien-Detailansicht hat einen Abschnitt „Beitrag je Komponente" mit je Markt: Tage
+    im Index, Ø Gewicht, Anteil an der Korrelation, Anteil am Beta (jeweils getrennt nach
+    Preis- und Gewichtseffekt) und eigene Korrelation.'
+  - Die Summe aller Anteile entspricht exakt (Toleranz 1e-9) der Korrelation bzw. dem Beta
+    der Haupttabelle für dieselbe Aktie.
+  - Angezeigt werden die Top 20 Komponenten nach Betrag des Anteils, eine Zeile „Übrige" und
+    eine Summenzeile.
+  - Ein Hinweistext erklärt, dass bei wenigen Index-Tagen der Zufall eine große Rolle spielt;
+    es werden keine p-Werte je Komponente angezeigt.
+  - Mindest-Ausschlag (min_change) und Lückenregel (max. 5 Tage) gelten identisch zur Haupttabelle.
+  - Funktioniert für gespeicherte Indizes und für ungespeicherte Index-Entwürfe (Vorschau,
+    DB unverändert).
+  - Jeder Aufruf wird geloggt (Index, Aktie, Anzahl Komponenten, Dauer).
+  - Bestehende Funktionen (Korrelationstabelle, Aktien-Detailansicht, Trades) bleiben unverändert
+    erhalten.
+  tests:
+  - Preiseffekt plus Gewichtseffekt aller Komponenten ergeben je Tag exakt ΔI, auch bei Ein-
+    und Austritten von Märkten.
+  - Die Anteile an Korrelation und Beta ergeben in Summe den Gesamtwert der Haupttabelle.
+  - Bei konstanten Gewichten ist der Gewichtseffekt 0.
+  - Ein neu in den Index aufgenommener Markt landet am Eintrittstag vollständig im Gewichtseffekt.
+  - Ein Index mit nur einer Komponente ergibt 100 % Anteil für diese Komponente.
+  - 'Randfall: weniger als 10 Beobachtungen liefert keine Anteile (wie Haupttabelle), ohne
+    Fehler.'
+  - 'Randfall: Aktie ohne Kursdaten liefert leeres Ergebnis ohne Fehler.'
+  - 'Randfall: Komponente an nur einem Tag im Index wird korrekt berücksichtigt.'
+  - 'Top-20-Kappung: Zeile „Übrige" enthält die Summe aller restlichen Anteile.'
+  - API-Test für gespeicherten Index und für die Vorschau mit ungespeicherter Regel.
+  - Bestehende Korrelationstests bleiben grün; keine Live-API-Aufrufe in Tests.
+  testdateien:
+  - backend/tests/test_stock_attribution.py
+  - backend/tests/test_stock_correlation.py
+  screenshot: .devconsole/features/1015-1200-performance-attribution-je-kompo.png
+- id: 1015-1157-signal-precision-mit-schwellenwe
+  name: Signal-Precision mit Schwellenwert in der Korrelations-Übersicht
+  status: umgesetzt
+  beschreibung: 'Anlass: Bei Southern Company wurde ein Bug vermutet. Die Analyse ergab keinen
+    Rechenfehler: Der kleine p-Wert kommt von der Stärke der (negativen) Korrelation, nicht
+    von der Trefferquote. Gewünscht ist zusätzlich eine Accuracy mit Threshold, die misst,
+    wie oft ein Index-Signal am nächsten Handelstag eine Aktienbewegung über einer Schwelle
+    in der erwarteten Richtung auslöst und ob das besser als Zufall ist.
+
+
+    Umfang:
+
+    - Neues Feld „Mindest-Aktienbewegung“ (Standard 1 %) in der Korrelations-Karte neben „Mindest-Veränderung“;
+    wird wie die bestehenden Einstellungen in localStorage gespeichert und als Query-Parameter
+    an GET /indices/{name}/correlation und POST .../correlation/preview übergeben.
+
+    - Signal = Handelstag T mit |ΔI_T| > Mindest-Veränderung (bestehende Logik). Treffer =
+    Rendite am nächsten Tag (bestehende Timing-Logik, kein Look-ahead) über der Mindest-Aktienbewegung
+    in der erwarteten Richtung.
+
+    - Richtung ohne Selbstbetrug: Die erwartete Richtung (mit oder gegen den Index) wird pro
+    Aktie aus der ersten Hälfte der Signal-Tage bestimmt (Vorzeichen der Korrelation dort).
+    Alle neuen Kennzahlen werden nur auf der zweiten Hälfte gemessen (Aufteilung 50/50, chronologisch).
+
+    - Beide Index-Richtungen werden in der Übersicht zusammengefasst (Anstieg → erwartete
+    Richtung, Rückgang → Gegenrichtung).
+
+    - Neue Spalten pro Aktie: Signale (Anzahl im Testteil), Precision (Treffer ÷ Signale),
+    Basisrate (Anteil aller Testtage, an denen die Aktie ohnehin über der Schwelle in die
+    jeweils erwartete Richtung ging), Lift (Precision ÷ Basisrate), p (Signal) als einseitiger
+    Binomialtest der Treffer gegen die Basisrate.
+
+    - Unter 15 Signalen im Testteil zeigt die Zeile „zu wenig Daten“ statt Precision, Lift
+    und p.
+
+    - Eigene Markierung, wenn p (Signal) unter der Bonferroni-Schwelle (0,05 ÷ getestete Aktien)
+    liegt.
+
+    - Die neuen Spalten sind sortierbar wie die bestehenden.
+
+    - Detailansicht (Klick auf eine Aktie): Robustheits-Matrix mit der Precision und Signal-Anzahl
+    für Index-Schwelle 0,5 / 1 / 2 Punkte × Aktien-Schwelle 0,5 / 1 / 2 %, dazu ein Hinweis,
+    dass die beste Zelle nicht nachträglich ausgewählt werden darf.
+
+    - Nebenbei: Bei der Trefferquote „(40 von 61)“ statt „(40)“ anzeigen. Bei negativer Korrelation
+    zusätzlich die Gegenquote zeigen (z. B. „38 % · gegenläufig 62 %“).
+
+    - Logging: Änderung der Mindest-Aktienbewegung (Frontend-Event), pro Korrelationslauf
+    die Gesamtzahl der Signale und die Zahl der Aktien unter der Mindestzahl an Signalen (Backend).
+
+    - Bestehende Spalten, Kennzahlen und API-Felder bleiben unverändert; die neuen Felder
+    kommen nur hinzu.'
+  kriterien:
+  - Die Korrelations-Übersicht zeigt die Spalten Signale, Precision, Basisrate, Lift und p
+    (Signal) für jede getestete Aktie.
+  - Das Feld „Mindest-Aktienbewegung“ ist vorhanden, steht standardmäßig auf 1 %, wird gespeichert
+    und löst bei Änderung eine Neuberechnung aus.
+  - Die erwartete Richtung wird nur aus der ersten Hälfte bestimmt, die Kennzahlen nur auf
+    der zweiten Hälfte berechnet.
+  - Bei weniger als 15 Signalen im Testteil steht „zu wenig Daten“.
+  - Liegt p (Signal) unter der Bonferroni-Schwelle, ist das sichtbar markiert.
+  - Die Detailansicht einer Aktie zeigt die 3×3-Robustheits-Matrix mit Precision und Signal-Anzahl
+    samt Hinweistext.
+  - Die Trefferquote zeigt „(Ereignisse von n)“, bei negativer Korrelation zusätzlich die
+    Gegenquote.
+  - Änderungen der Schwelle und die Signal-Zahlen pro Lauf erscheinen im Log.
+  - Alle bestehenden Tests sind grün, bestehende Felder der Correlation-API sind unverändert.
+  - Changelog.md und Requirements.log sind aktualisiert.
+  tests:
+  - Precision, Basisrate und Lift auf festen Beispieldaten entsprechen den von Hand nachgerechneten
+    Werten.
+  - Binomialtest liefert für bekannte Fälle den erwarteten p-Wert (z. B. 25 von 40 bei Basisrate
+    0,5 → einseitig ≈ 0,077).
+  - 'Zeitaufteilung: Die Richtung wird nur aus der ersten Hälfte bestimmt; eine Umkehr des
+    Musters in der zweiten Hälfte senkt die Precision (kein In-Sample-Vorteil).'
+  - Gegenläufige Aktie (negative Korrelation in der ersten Hälfte) wird mit Gegenrichtung
+    bewertet und erzielt die erwarteten Treffer.
+  - Unter 15 Signalen im Testteil liefert die API für Precision, Lift und p keine Werte (null)
+    und das Frontend zeigt „zu wenig Daten“.
+  - Eine Bewegung genau auf der Aktien-Schwelle zählt nicht als Treffer (Rand-/Float-Fall).
+  - Bonferroni-Markierung wird nur gesetzt, wenn p (Signal) unter 0,05 ÷ getestete Aktien
+    liegt.
+  - Robustheits-Matrix liefert 9 Zellen mit den richtigen Schwellenkombinationen und Signal-Anzahlen.
+  - Der Parameter min_stock_move wird von beiden Endpunkten (gespeicherte Regel und Preview)
+    angenommen und validiert; ungültige Werte führen zu HTTP 422.
+  - Bestehende Correlation-Felder (correlation, p_value, hit_rate, events_up/down, slope_per_point)
+    bleiben in Wert und Format unverändert.
+  testdateien:
+  - backend/tests/test_signal_precision.py
+  - backend/tests/test_stock_correlation.py
+  screenshot: .devconsole/features/1015-1157-signal-precision-mit-schwellenwe.png
+- id: 1015-1111-constituents-des-index-sichtbar
+  name: Constituents des Index sichtbar machen
+  status: umgesetzt
+  beschreibung: I need to see what the constituents of the index are
+  testdateien:
+  - backend/tests/test_dashboard.py
+  screenshot: .devconsole/features/1015-1111-constituents-des-index-sichtbar.png
+- id: 1015-1110-charts-mit-performance-und-rendi
+  name: Charts mit Performance und Renditeverläufen visuell prüfen
+  status: umgesetzt
+  beschreibung: Let me click a chart here and see a performance chart and the two return timeseries
+    overlapping and the trades I would do. I need to visually see if it makes sense.
+  testdateien:
+  - backend/tests/test_stock_correlation.py
+  screenshot: .devconsole/features/1015-1110-charts-mit-performance-und-rendi.png
+- id: 1015-0953-historische-daten-fur-indizes-un
+  name: Historische Daten für Indizes und Märkte ergänzen
+  status: umgesetzt
+  beschreibung: No we need historic data here
+  testdateien:
+  - backend/tests/test_history_backfill.py
+  - backend/tests/test_index_builder.py
+  screenshot: .devconsole/features/1015-0953-historische-daten-fur-indizes-un.png
+- id: 1015-0943-correlate-indices-with-top-100-u
+  name: Correlate indices with top 100 US stocks
+  status: umgesetzt
+  beschreibung: now build a capability, where each index is correlated to stocks (take top
+    100 US Stocks) and checks for prediction pattern, next day return when change in Index
+  testdateien:
+  - backend/tests/test_stock_correlation.py
+  - backend/tests/test_migration.py
+- id: 1015-0912-projekt-frontend-zum-index-build
+  name: Projekt-Frontend zum Index-Builder umbauen
+  status: umgesetzt
+  beschreibung: transform this project frontend into an index builder frontend. We are close
+    to it. I want to build an index, see the rules we assembled in the right hand side (like
+    liquidity filters, selection criteria) and the see how the index performed over the past
+    and what its consituents are
+  testdateien:
+  - backend/tests/test_index_builder.py
+  - backend/tests/test_dashboard.py
+  - backend/tests/test_index_params.py
+  - backend/tests/test_market_links.py
+  - backend/tests/test_market_population.py
+- id: 0924-2315-24h-volume-as-liquidity-number
+  name: 24h Volume as Liquidity Number
+  status: geplant
+  beschreibung: 'Lets use the 24h Volume as Liqiodity Number '
+  testdateien:
+  - backend/tests/test_field_docs.py
+  - backend/tests/test_clients.py
+  - backend/tests/test_market_population.py
+  - backend/tests/test_eui_harmonize.py
+  - backend/tests/test_market_links.py
+  - backend/tests/test_manufacture_api.py
+  screenshot: .devconsole/features/0924-2315-24h-volume-as-liquidity-number.png
+  hinweis: '⛔ Unfertig nach 0 Nacharbeit(en) — Lücken: Offen laut Agent: Kalshi liefert live
+    deutlich weniger Märkte über der 10 000-USD-Schwelle (Stichprobe: 2 statt vieler), weil
+    die /events-Abfrage unsortiert auf 10 Seiten begrenzt ist und kaum Märkte so viel 24h-Umsatz
+    haben – Schwelle oder Seitenzahl ggf. anpassen.'
+- id: 0924-2314-sorting-by-metrics
+  name: Sorting by metrics
+  status: umgesetzt
+  beschreibung: Let me sort by these metrics
+  testdateien:
+  - backend/tests/test_manufacture_sorting.py
+  screenshot: .devconsole/features/0924-2314-sorting-by-metrics.png
+- id: 0924-2254-show-only-tags-for-existing-mark
+  name: Show only Tags for existing markets
+  status: umgesetzt
+  beschreibung: Only show the Tags (and numbers) of markets which exist given the set filter
+    criteria
+  testdateien:
+  - backend/tests/test_manufacture_catalog.py
+  - backend/tests/test_manufacture_api.py
+  screenshot: .devconsole/features/0924-2254-show-only-tags-for-existing-mark.png
+- id: 0924-2252-liquidity-normalization-between
+  name: Liquidity normalization between markets
+  status: umgesetzt
+  beschreibung: Give explanations to the fields. What exactly is Liquidity and how did you
+    normalize so that you can compare Polymarket and Kalshi
+  testdateien:
+  - backend/tests/test_field_docs.py
+  screenshot: .devconsole/features/0924-2252-liquidity-normalization-between.png
+- id: 0924-2251-minimum-and-maximum-price-defaul
+  name: Minimum and maximum price defaults
+  status: umgesetzt
+  beschreibung: give me a minimum and maximum price and set defaults to 0.03 and 0.97
+  testdateien:
+  - backend/tests/test_manufacture_catalog.py
+  - backend/tests/test_manufacture_api.py
+  - backend/tests/test_dashboard.py
+  screenshot: .devconsole/features/0924-2251-minimum-and-maximum-price-defaul.png
+- id: 0924-0806-button-fur-top-100-liquideste-ma
+  name: Button für Top 100 liquideste Märkte
+  status: umgesetzt
+  beschreibung: Here I need to see a button for the top 100 most liquid markets
+  tests:
+  - backend/tests/test_manufacture_catalog.py
+  - backend/tests/test_manufacture_api.py
+  - backend/tests/test_dashboard.py
+  testdateien:
+  - backend/tests/test_manufacture_catalog.py
+  - backend/tests/test_manufacture_api.py
+  - backend/tests/test_dashboard.py
+  screenshot: .devconsole/features/0924-0806-button-fur-top-100-liquideste-ma.png
+- id: 0924-0747-index-manufacture-fur-kalshi-pol
+  name: Index Manufacture für Kalshi/Polymarket-Exploration
+  status: umgesetzt
+  beschreibung: 'Ich brauche eine Oberfläche, über die ich Kalshi und Polymarket exploriren
+    kann (wie ein Data Catalog). Hierfür müssen die bestehenden Märkte bekannt sein und Liquiditäts-Kennzahlen
+    und durchsuchbare Beschreibung und Tags haben. Ich brauche eine KI Funktion ,über die
+    ich mir dann zu einer bestimmten Absicht Märkte vorschlagen lassen kann und gemeinsam
+    mit KI eine Index Beschreibung erarbeiten kann. Lass uns dass Index Manufacture nennen '
+  tests:
+  - backend/tests/test_manufacture_catalog.py
+  - backend/tests/test_manufacture_assistant.py
+  - backend/tests/test_manufacture_api.py
+  - backend/tests/test_migration.py
+  - backend/tests/test_clients.py
+  - backend/tests/test_dashboard.py
+  testdateien:
+  - backend/tests/test_manufacture_catalog.py
+  - backend/tests/test_manufacture_assistant.py
+  - backend/tests/test_manufacture_api.py
+  - backend/tests/test_migration.py
+  - backend/tests/test_clients.py
+  - backend/tests/test_dashboard.py
+- id: 0923-2303-haiku-vorabprufung-fur-marktunsi
+  name: Haiku-Vorabprüfung für Marktunsicherheit
+  status: umgesetzt
+  beschreibung: "Each of this markets needs a pre-screening by Haiku. How is this market saying
+    something about economic uncertainty and how should the price be transformed to be between
+    0 no uncertainty and 1 high uncertainty. Haiku gives a pre-setting. \n\nAlso, when markets
+    are, for example, on ranges of interest rates or something similar, the current value
+    of these has to be taken into account to see if the range would mean an increase of a
+    decrease.\n\nStore all Haiku results for each market so that they only need to be generated
+    for markets which have not yet been seen."
+  tests:
+  - backend/tests/test_eui_prescreen.py
+  - backend/tests/test_migration.py
+  - backend/tests/test_dashboard.py
+  - backend/tests/test_eui_classify.py
+  - backend/tests/test_eui_api.py
+  testdateien:
+  - backend/tests/test_eui_prescreen.py
+  - backend/tests/test_migration.py
+  - backend/tests/test_dashboard.py
+  - backend/tests/test_eui_classify.py
+  - backend/tests/test_eui_api.py
+  screenshot: .devconsole/features/0923-2303-haiku-vorabprufung-fur-marktunsi.png
+- id: 0923-0740-prediction-market-index-wie-fact
+  name: Prediction Market Index wie Factor Investing Fund
+  status: umgesetzt
+  beschreibung: Please make the Prediction Market Index as nice as the Factor INvesting Fund
+  tests:
+  - backend/tests/test_dashboard.py
+  - backend/tests/test_market_population.py
+  testdateien:
+  - backend/tests/test_dashboard.py
+  - backend/tests/test_market_population.py
+  screenshot: .devconsole/features/0923-0740-prediction-market-index-wie-fact.png
 - id: 0922-1744-github-actions-testlauf-fur-mark
   name: GitHub-Actions-Testlauf für Marktdaten
   status: umgesetzt

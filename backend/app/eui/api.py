@@ -8,6 +8,8 @@ GET  /eui/plausibility           -> event-day check (stands in for the backtest)
 Admin (human review and operations):
 GET  /eui/admin/classifications  -> proposals to review (?status=proposed&economic_only=1)
 PUT  /eui/admin/classifications/{id} -> confirm / reject / change polarity
+GET  /eui/admin/references        -> current indicator values used to read range markets
+PUT  /eui/admin/references/{indicator} -> set a value (as_of, unit, note)
 GET  /eui/admin/constituents     -> constituents of the latest value with weights
 GET  /eui/admin/runs             -> recent snapshot runs
 POST /eui/admin/run              -> run the daily pipeline now
@@ -27,6 +29,7 @@ from backend.app.eui.compute import history, latest_value
 from backend.app.eui.daily import run_daily
 from backend.app.eui.models import POLARITIES, STATUSES, IndexComposition, IndexValue, MarketClassification
 from backend.app.eui.plausibility import add_event, check_plausibility
+from backend.app.eui.reference import list_reference_values, seed_reference_indicators, upsert_reference_value
 from backend.app.eui.snapshot import default_clients, recent_runs
 from backend.app.models import utcnow
 
@@ -49,6 +52,14 @@ class ClassificationUpdate(BaseModel):
     status: str | None = None
     polarity: str | None = None
     is_economic: bool | None = None
+
+
+class ReferenceUpdate(BaseModel):
+    value: float | None = None
+    unit: str | None = None
+    as_of: date | None = None
+    note: str | None = None
+    label: str | None = None
 
 
 class EventCreate(BaseModel):
@@ -88,6 +99,8 @@ def classification_payload(row: MarketClassification) -> dict:
     return {
         "id": row.id, "source": row.source, "external_id": row.external_id, "title": row.title,
         "is_economic": row.is_economic, "polarity": row.polarity, "rationale": row.rationale,
+        "uncertainty_note": row.uncertainty_note, "direction": row.direction,
+        "reference_indicator": row.reference_indicator, "reference_value": row.reference_value,
         "model": row.model, "status": row.status, "created_at": row.created_at.isoformat() if row.created_at else None,
         "reviewed_at": row.reviewed_at.isoformat() if row.reviewed_at else None,
     }
@@ -122,6 +135,30 @@ def review_classification(classification_id: int, body: ClassificationUpdate, se
     session.commit()
     logger.info("classification %d reviewed: status=%s polarity=%s economic=%s", row.id, row.status, row.polarity, row.is_economic)
     return classification_payload(row)
+
+
+def reference_row(row) -> dict:
+    return {"indicator": row.indicator, "label": row.label, "value": row.value, "unit": row.unit,
+            "as_of": row.as_of.isoformat() if row.as_of else None, "note": row.note,
+            "updated_at": row.updated_at.isoformat() if row.updated_at else None}
+
+
+@router.get("/admin/references")
+def references(session=Depends(get_session)) -> list[dict]:
+    seed_reference_indicators(session)
+    return [reference_row(r) for r in list_reference_values(session)]
+
+
+@router.put("/admin/references/{indicator}")
+def update_reference(indicator: str, body: ReferenceUpdate, session=Depends(get_session)) -> dict:
+    indicator = indicator.strip().lower()[:64]
+    if not indicator:
+        raise HTTPException(400, "indicator must not be empty")
+    logger.info("reference update requested: %s = %s", indicator, body.value)
+    row = upsert_reference_value(session, indicator, body.value, unit=(body.unit or "").strip()[:16] or None,
+                                 as_of=body.as_of, note=(body.note or "").strip()[:256] or None,
+                                 label=(body.label or "").strip()[:128] or None)
+    return reference_row(row)
 
 
 @router.get("/admin/constituents")

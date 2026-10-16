@@ -1,6 +1,6 @@
 """EUI endpoints: public value without raw data, admin review, manual run - no network."""
 
-from datetime import date
+from datetime import datetime, timezone
 
 import pytest
 from fastapi.testclient import TestClient
@@ -36,7 +36,7 @@ def test_public_value_before_and_after_run_names_sources_only(client):
     assert summary["snapshot"]["status"] == "partial" and summary["index"]["constituents"] == 2
 
     body = client.get("/eui").json()
-    assert body["value_date"] == date.today().isoformat()
+    assert body["value_date"] == datetime.now(timezone.utc).date().isoformat()  # snapshot day is UTC
     assert 0 <= body["value"] <= 100 and body["constituent_count"] == 2
     assert "Polymarket" in body["attribution"] and "Kalshi" in body["attribution"]
     assert set(body) == {"value_date", "value", "constituent_count", "as_of", "sources", "attribution"}  # no raw data
@@ -61,7 +61,7 @@ def test_admin_review_flow_and_validation(client):
     assert client.put("/eui/admin/classifications/9999", json={"status": "confirmed"}).status_code == 404
 
     constituents = client.get("/eui/admin/constituents").json()
-    assert constituents["period"] == date.today().strftime("%Y-%m") and len(constituents["constituents"]) == 2
+    assert constituents["period"] == datetime.now(timezone.utc).strftime("%Y-%m") and len(constituents["constituents"]) == 2
     runs = client.get("/eui/admin/runs").json()
     assert runs[0]["status"] == "partial" and runs[0]["source_counts"] == {"polymarket": 3, "kalshi": 0}
 
@@ -72,10 +72,3 @@ def test_events_and_plausibility_endpoints(client):
     assert client.post("/eui/admin/events", json={"event_date": "2026-09-22", "label": "  "}).status_code == 400
     report = client.get("/eui/plausibility").json()
     assert report["verdict"] == "insufficient_data" and report["backtest_possible"] is False
-
-
-def test_dashboard_ships_eui_section(client):
-    html = client.get("/").text
-    assert 'id="eui"' in html and "/static/eui.js" in html
-    assert "Polymarket und Kalshi" in html
-    assert client.get("/static/eui.js").status_code == 200

@@ -1,4 +1,4 @@
-"""Request bodies for index rules with the validation shared by preview, create and update.
+"""Request bodies for index rules (preview of the read-only archive) and dashboard log events.
 
 Range rules raise HTTP 400 (invalid values); type errors stay FastAPI's 422.
 """
@@ -7,8 +7,6 @@ from fastapi import HTTPException
 from pydantic import BaseModel, Field
 
 from backend.app.models import DEFAULT_MAX_PRICE, DEFAULT_MIN_PRICE, MIN_LIQUIDITY_USD
-
-MAX_NAME_LENGTH = 128
 
 
 class RuleSpec(BaseModel):
@@ -35,16 +33,12 @@ class RuleSpec(BaseModel):
         }
 
 
-class IndexCreate(RuleSpec):
-    """A new index: unique name plus its rule."""
+class ClientLog(BaseModel):
+    """A dashboard event (button click, filter change, error) forwarded to the server log."""
 
-    index_name: str
-
-    def validated_name(self) -> str:
-        name = self.index_name.strip()
-        if not name or len(name) > MAX_NAME_LENGTH:
-            raise HTTPException(400, f"index_name must be 1-{MAX_NAME_LENGTH} characters")
-        return name
+    level: str = "info"
+    event: str = Field(min_length=1, max_length=120)
+    detail: dict | None = None
 
 
 def _clean_list(values: list[str]) -> list[str]:

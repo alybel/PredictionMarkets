@@ -20,7 +20,7 @@ from sqlalchemy.orm import Session
 from backend.app.models import DEFAULT_MAX_PRICE, DEFAULT_MIN_PRICE, MIN_LIQUIDITY_USD, IndexRule, utcnow
 
 
-def _tags_ok(rule: IndexRule, market) -> bool:
+def _tags_ok(rule: IndexRule, market, _now=None) -> bool:
     """Empty list: no restriction. Otherwise any rule tag must appear in the market's tags."""
     if not rule.categories:
         return True
@@ -28,7 +28,7 @@ def _tags_ok(rule: IndexRule, market) -> bool:
     return bool(wanted & market_tags(market))
 
 
-def _keywords_ok(rule: IndexRule, market) -> bool:
+def _keywords_ok(rule: IndexRule, market, _now=None) -> bool:
     """Empty list: no restriction. Otherwise any keyword must occur in the title."""
     if not rule.keywords:
         return True
@@ -36,12 +36,12 @@ def _keywords_ok(rule: IndexRule, market) -> bool:
     return any(k.lower() in title for k in rule.keywords)
 
 
-def _liquidity_ok(rule: IndexRule, market) -> bool:
+def _liquidity_ok(rule: IndexRule, market, _now=None) -> bool:
     """Unknown liquidity counts as 0; the rule can never go below the global floor."""
     return (market.liquidity or 0.0) >= effective_min_liquidity(rule.min_liquidity)
 
 
-def _price_ok(rule: IndexRule, market) -> bool:
+def _price_ok(rule: IndexRule, market, _now=None) -> bool:
     """Unknown price passes; a missing bound means no restriction."""
     price = market.price
     if price is None:
@@ -51,14 +51,14 @@ def _price_ok(rule: IndexRule, market) -> bool:
     return lower <= price <= upper
 
 
-def _end_date_ok(rule: IndexRule, market) -> bool:
-    """Markets whose end date lies in the past are excluded; naive datetimes count as UTC."""
+def _end_date_ok(rule: IndexRule, market, now=None) -> bool:
+    """Markets whose end date lies before ``now`` (default: current time) are excluded; naive datetimes count as UTC."""
     end_date = market.end_date
     if end_date is None:
         return True
     if end_date.tzinfo is None:
         end_date = end_date.replace(tzinfo=timezone.utc)
-    return end_date > utcnow()
+    return end_date > (now or utcnow())
 
 
 FUNNEL_STAGES = (
@@ -88,12 +88,15 @@ def market_matches(rule: IndexRule, market) -> bool:
     return all(check(rule, market) for _, check in FUNNEL_STAGES)
 
 
-def apply_funnel(rule: IndexRule, markets) -> tuple[list, dict[str, int]]:
-    """Selected markets plus the survivor count after each funnel stage."""
+def apply_funnel(rule: IndexRule, markets, now=None) -> tuple[list, dict[str, int]]:
+    """Selected markets plus the survivor count after each funnel stage.
+
+    ``now`` is the reference time of the end-date check (a past day for history replays).
+    """
     remaining = list(markets)
     funnel = {"loaded": len(remaining)}
     for name, check in FUNNEL_STAGES:
-        remaining = [m for m in remaining if check(rule, m)]
+        remaining = [m for m in remaining if check(rule, m, now)]
         funnel[name] = len(remaining)
     return remaining, funnel
 

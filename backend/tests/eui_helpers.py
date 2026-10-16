@@ -19,6 +19,7 @@ def market(**overrides) -> NormalizedMarket:
         volume_24h=5_000.0, best_bid=0.49, best_ask=0.51, active=True,
     )
     defaults.update(overrides)
+    defaults.setdefault("depth", defaults["liquidity"])  # fixtures give one standing-money figure for both
     return NormalizedMarket(**defaults)
 
 
