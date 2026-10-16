@@ -774,7 +774,7 @@
   - backend/tests/test_market_population.py
 - id: 0924-2315-24h-volume-as-liquidity-number
   name: 24h Volume as Liquidity Number
-  status: geplant
+  status: umgesetzt
   beschreibung: 'Lets use the 24h Volume as Liqiodity Number '
   testdateien:
   - backend/tests/test_field_docs.py
@@ -784,10 +784,6 @@
   - backend/tests/test_market_links.py
   - backend/tests/test_manufacture_api.py
   screenshot: .devconsole/features/0924-2315-24h-volume-as-liquidity-number.png
-  hinweis: '⛔ Unfertig nach 0 Nacharbeit(en) — Lücken: Offen laut Agent: Kalshi liefert live
-    deutlich weniger Märkte über der 10 000-USD-Schwelle (Stichprobe: 2 statt vieler), weil
-    die /events-Abfrage unsortiert auf 10 Seiten begrenzt ist und kaum Märkte so viel 24h-Umsatz
-    haben – Schwelle oder Seitenzahl ggf. anpassen.'
 - id: 0924-2314-sorting-by-metrics
   name: Sorting by metrics
   status: umgesetzt
