@@ -30,7 +30,7 @@ from backend.app.eui.daily import run_daily
 from backend.app.eui.models import POLARITIES, STATUSES, IndexComposition, IndexValue, MarketClassification
 from backend.app.eui.plausibility import add_event, check_plausibility
 from backend.app.eui.reference import list_reference_values, seed_reference_indicators, upsert_reference_value
-from backend.app.eui.snapshot import default_clients, recent_runs
+from backend.app.eui.snapshot import recent_runs
 from backend.app.models import utcnow
 
 logger = logging.getLogger(__name__)
@@ -40,8 +40,9 @@ SOURCES = ["Polymarket", "Kalshi"]
 ATTRIBUTION = "Economic Uncertainty Index - Quelle: Polymarket und Kalshi"
 
 
-def get_clients() -> list:
-    return default_clients()
+def get_clients() -> list | None:
+    """None: the snapshot asks the raw data layer for its markets (tests inject fake clients)."""
+    return None
 
 
 def get_classifier():

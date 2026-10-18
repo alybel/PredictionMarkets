@@ -143,13 +143,13 @@ def test_rate_limit_is_retried(monkeypatch):
 
         def raise_for_status(self):
             if self.status_code >= 400:
-                raise sources.requests.HTTPError(str(self.status_code))
+                raise sources.http.HTTPError(str(self.status_code))
 
         def json(self):
             return {"ok": True}
 
     answers = iter([Resp(429), Resp(429), Resp(200)])
-    monkeypatch.setattr(sources.requests, "get", lambda *a, **k: next(answers))
+    monkeypatch.setattr(sources.http.requests, "get", lambda *a, **k: next(answers))
     waits = []
     assert sources.http_get("https://x", sleep=waits.append) == {"ok": True}
     assert len(waits) == 2

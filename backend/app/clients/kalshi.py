@@ -15,6 +15,7 @@ as depth proxy whenever the reported liquidity is missing or zero.
 (a contract pays 1 USD, so contracts x price is the dollar turnover);
 ``best_bid``/``best_ask`` come from the yes side in dollars (legacy cents / 100).
 ``description`` is the market's primary rules text (``rules_primary``), else its subtitle.
+``event_key`` is the event ticker, ``outcome_label`` the market's ``yes_sub_title`` (else subtitle).
 """
 
 from backend.app.clients.base import BaseClient, NormalizedMarket, basis_of, clean_tags, clean_text, parse_datetime, parse_float
@@ -46,7 +47,8 @@ class KalshiClient(BaseClient):
                     category = event.get("category")
                     for market in event.get("markets") or []:
                         if isinstance(market, dict):
-                            items.append({**market, "category": category})
+                            items.append({**market, "category": category, "event_title": event.get("title"),
+                                          "event_ticker": market.get("event_ticker") or event.get("event_ticker")})
             cursor = data.get("cursor")
             if not cursor:
                 break
@@ -79,6 +81,9 @@ class KalshiClient(BaseClient):
             best_ask=self._price_field(item, "yes_ask_dollars", "yes_ask"),
             active=(item["status"] == "active") if isinstance(item.get("status"), str) else None,
             description=clean_text(item.get("rules_primary")) or clean_text(item.get("subtitle")),
+            event_key=clean_text(item.get("event_ticker"), 128),
+            event_title=clean_text(item.get("event_title"), 512),
+            outcome_label=clean_text(item.get("yes_sub_title"), 256) or clean_text(item.get("subtitle"), 256),
         )
 
     @classmethod

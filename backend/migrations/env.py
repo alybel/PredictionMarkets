@@ -12,6 +12,12 @@ from backend.app.fed import models as fed_models  # noqa: F401
 from backend.app.staging import models as staging_models  # noqa: F401
 from backend.app.metrics import models as metrics_models  # noqa: F401
 from backend.app.builder import models as builder_models  # noqa: F401
+from backend.app.events import models as events_models  # noqa: F401
+from backend.app.domains import models as domains_models  # noqa: F401
+from backend.app.directory import models as directory_models  # noqa: F401
+from backend.app.risk import models as risk_models  # noqa: F401
+from backend.app.forecast import models as forecast_models  # noqa: F401
+from backend.app.rawdata import models as rawdata_models  # noqa: F401
 
 target_metadata = Base.metadata
 

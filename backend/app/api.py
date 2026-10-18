@@ -13,12 +13,20 @@ DELETE /indices/{name}           -> delete an archive index (204; 404 if unknown
 GET    /indices/{name}/history   -> index value per stored snapshot day (backtest, see backend.app.history)
 GET    /indices/{name}/correlation -> index changes vs. next-day returns of the top-100 US stocks (see backend.app.stocks)
 GET    /tags                     -> tags delivered by the market population, with counts
+GET    /topics                   -> topic tree: topic -> subtopic with counts (from the tag list)
+GET    /topics/nodes             -> events (with outcomes) and markets of one subtopic (?topic, subtopic)
 /eui/...                         -> Economic Uncertainty Index (see backend.app.eui.api)
 /quality/...                     -> data quality and look-ahead guards of the stored history (see backend.app.quality)
 /fed/..., /quality/fed/...       -> Fed rate chains: staging, raw layer, front/second chain, checks (see backend.app.fed.api)
 /manufacture/...                 -> Index Manufacture: catalog, assistant, drafts (see backend.app.manufacture.api)
 /metrics/...                     -> metric catalog: status, checks, release, block (see backend.app.metrics.api)
 /builder/...                     -> index builder from validated metrics (see backend.app.builder.api)
+/catalog/...                     -> data catalog: stored markets and stock closes with history and quality (see backend.app.catalog.api)
+/events/...                      -> events: outcome markets of one source event bundled (see backend.app.events.api)
+/domains/...                     -> domains with full raw history incl. expired markets (see backend.app.domains.api)
+/directory/...                   -> market directory of both sources, "new markets" inbox, coverage (see backend.app.directory.api)
+/raw/...                         -> raw data layer: refresh requests with progress, no parallel fetch (see backend.app.rawdata.api)
+/risk/...                        -> risk topics: classification per topic, review list, timeline (see backend.app.risk.api)
 
 Market data comes from a server-side cache of all sources (about 60 s);
 both the DB session and the market provider are FastAPI dependencies so
@@ -31,18 +39,32 @@ from contextlib import asynccontextmanager
 from dataclasses import asdict
 from pathlib import Path
 
-from fastapi import Depends, FastAPI, HTTPException, Request, Response
+from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from backend.app.aggregation import aggregate
-from backend.app.clients.kalshi import KalshiClient
-from backend.app.clients.polymarket import PolymarketClient
-from backend.app.deps import get_session
+from backend.app.clients.base import EVENT_FIELDS
+from backend.app.deps import get_session, session_factory
 from backend.app.engine import apply_funnel, build_rule, delete_rule, get_rule, list_rules, tag_counts
 from backend.app.field_docs import field_docs_payload
 from backend.app.backfill.api import router as backfill_router
 from backend.app.builder.api import router as builder_router
+from backend.app.catalog.api import router as catalog_router
+from backend.app.events.api import router as events_router
+from backend.app.agent.api import router as agent_router
+from backend.app.agent.creator_api import router as creator_router
+from backend.app.agent.finder_api import router as finder_router
+from backend.app.domains.api import router as domains_router
+from backend.app.directory.api import router as directory_router
+from backend.app.rawdata.access import MissingRawData
+from backend.app.rawdata.api import router as raw_router
+from backend.app.rawdata.providers import RawMarkets
+from backend.app.risk.api import router as risk_router
+from backend.app.forecast.api import router as forecast_router
+from backend.app.workshop.api import router as workshop_router
+from backend.app.events.service import sync_events
+from backend.app.events.tree import build_tree, subtopic_nodes
 from backend.app.history import router as history_router
 from backend.app.eui.api import router as eui_router
 from backend.app.eui.compute import latest_value
@@ -90,6 +112,17 @@ app.include_router(fed_router)
 app.include_router(metrics_router)
 app.include_router(builder_router)
 app.include_router(metric_stocks_router)
+app.include_router(catalog_router)
+app.include_router(events_router)
+app.include_router(agent_router)
+app.include_router(finder_router)
+app.include_router(creator_router)
+app.include_router(domains_router)
+app.include_router(directory_router)
+app.include_router(raw_router)
+app.include_router(risk_router)
+app.include_router(forecast_router)
+app.include_router(workshop_router)
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
@@ -118,10 +151,14 @@ def dashboard() -> FileResponse:
 
 
 def fetch_all_sources() -> list:
-    """Fresh normalized markets from all sources; empty on API failures."""
+    """Normalized markets of all sources: one refresh request to the raw data layer, then built from its raw answers;
+    a source without raw data stays empty (logged clearly, never a live fetch)."""
     markets: list = []
-    for client in (PolymarketClient(), KalshiClient()):
-        markets.extend(client.fetch_markets())
+    for client in RawMarkets(session_factory(), "index").clients("index"):
+        try:
+            markets.extend(client.fetch_markets())
+        except MissingRawData as exc:
+            logger.warning("index population: %s", exc)
     return markets
 
 
@@ -170,12 +207,13 @@ def rule_payload(rule: IndexRule) -> dict:
 
 def index_payload(rule: IndexRule, markets) -> dict:
     selected, funnel = apply_funnel(rule, markets)
-    result = aggregate(rule.index_name, selected)
+    payload = asdict(aggregate(rule.index_name, selected))
+    payload["markets"] = [{k: v for k, v in m.items() if k not in EVENT_FIELDS} for m in payload["markets"]]
     return {
         "as_of": utcnow().isoformat(),
         "funnel": funnel,
         "min_liquidity_floor": MIN_LIQUIDITY_USD,
-        **asdict(result),
+        **payload,
     }
 
 
@@ -226,6 +264,30 @@ def remove_index(index_name: str, session=Depends(get_session)) -> Response:
         raise HTTPException(status_code=404, detail=f"unknown index {index_name!r}")
     logger.info("archive index %r deleted", index_name)
     return Response(status_code=204)
+
+
+@app.post("/events/sync")
+def events_sync(session=Depends(get_session), markets=Depends(get_markets)) -> dict:
+    """Bundle the cached market population into events now (otherwise done by the daily snapshot)."""
+    logger.info("events sync requested for %d markets", len(markets))
+    counts = sync_events(session, markets)
+    session.commit()
+    return counts
+
+
+@app.get("/topics")
+def topics(markets=Depends(get_markets)) -> dict:
+    """Topic tree (topic -> subtopic with counts) of the cached population; nodes load per subtopic."""
+    return {"as_of": utcnow().isoformat(), "topics": build_tree(markets)}
+
+
+@app.get("/topics/nodes")
+def topic_nodes(topic: str = Query(..., max_length=200), subtopic: str = Query(..., max_length=200),
+                markets=Depends(get_markets)) -> dict:
+    """Events (with all outcome markets) and standalone markets of one subtopic."""
+    nodes = subtopic_nodes(markets, topic, subtopic)
+    logger.info("topic nodes %r / %r: %d nodes", topic, subtopic, len(nodes))
+    return {"topic": topic, "subtopic": subtopic, "nodes": nodes}
 
 
 @app.get("/tags")

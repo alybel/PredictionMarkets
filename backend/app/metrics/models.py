@@ -1,5 +1,5 @@
 """Persisted state of a catalog metric (status, release, block, last check results; one row per metric) and the
-market-basket metrics created from Index Manufacture drafts."""
+custom metrics: market baskets (Index Manufacture, tab "Metriken") and structured chain / single-market metrics (agent step 2)."""
 
 from datetime import datetime
 
@@ -29,7 +29,9 @@ class MetricState(Base):
 
 
 class CustomMetric(Base):
-    """Market-basket metric from an Index Manufacture draft: liquidity-weighted price of its markets per snapshot day."""
+    """Custom metric. ``basket``: liquidity-weighted price of ``markets`` per snapshot day (unchanged since 1015-2351).
+    ``chain`` / ``single``: structured ``spec`` {links: [{source, external_id, title, roll_on, direction}], rules, notes,
+    domain_id, assessment}, computed by ``metrics.chain``."""
 
     __tablename__ = "custom_metrics"
 
@@ -38,4 +40,15 @@ class CustomMetric(Base):
     calculation: Mapped[str] = mapped_column(String(4000), default="")
     markets: Mapped[list] = mapped_column(JSON, default=list)  # [{source, external_id, title}]
     draft_id: Mapped[int | None] = mapped_column(Integer)
+    kind: Mapped[str] = mapped_column(String(16), default="basket", server_default="basket")
+    spec: Mapped[dict | None] = mapped_column(JSON)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class MetricBookmark(Base):
+    """Catalog metric bookmarked in the agent tab ("Metriken finden") for the index builder."""
+
+    __tablename__ = "metric_bookmarks"
+
+    key: Mapped[str] = mapped_column(String(64), primary_key=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)

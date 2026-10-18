@@ -3,7 +3,9 @@
 Every run stores all active markets of the day (eligible or not, with the
 exclusion reason), so future backtests can replay any filter. A second run
 on the same day replaces that day's rows. Sources are fetched without the
-dashboard's liquidity floor and with a small pause between pages.
+dashboard's liquidity floor and with a small pause between pages: by default one
+refresh request to the raw data layer (raw job "markets", profile "snapshot"),
+then the clients read exactly that job's answers from ``raw_responses``.
 """
 
 import logging
@@ -12,31 +14,25 @@ from datetime import date, datetime
 from sqlalchemy import delete, func, insert, select
 from sqlalchemy.orm import Session
 
-from backend.app.clients.kalshi import KalshiClient
-from backend.app.clients.polymarket import PolymarketClient
 from backend.app.eui.harmonize import harmonize
+from backend.app.events.service import sync_events
 from backend.app.eui.models import MarketSnapshot, SnapshotRun
 from backend.app.models import utcnow
+from backend.app.rawdata.providers import RawMarkets
 
 logger = logging.getLogger(__name__)
 
-REQUEST_DELAY_SECONDS = 0.2
-POLYMARKET_MAX_PAGES = 50
-KALSHI_MAX_PAGES = 30
 
-
-def default_clients() -> list:
-    polymarket = PolymarketClient(liquidity_floor=None, request_delay=REQUEST_DELAY_SECONDS)
-    polymarket.max_pages = POLYMARKET_MAX_PAGES
-    kalshi = KalshiClient(liquidity_floor=None, request_delay=REQUEST_DELAY_SECONDS)
-    kalshi.max_pages = KALSHI_MAX_PAGES
-    return [polymarket, kalshi]
+def default_clients(session: Session, trigger: str = "snapshot") -> list:
+    """Snapshot clients reading from raw data, after one refresh request to the raw layer."""
+    return RawMarkets.for_session(session, trigger).clients("snapshot")
 
 
 def take_snapshot(session: Session, clients=None, snapshot_date: date | None = None, now: datetime | None = None) -> SnapshotRun:
     """Fetch, harmonize and store today's market state; never raises on source failures."""
     now = now or utcnow()
     snapshot_date = snapshot_date or now.date()
+    clients = clients or default_clients(session)  # before the run row: the raw job writes through its own connection
     run = SnapshotRun(snapshot_date=snapshot_date, started_at=now)
     session.add(run)
     session.flush()
@@ -44,12 +40,14 @@ def take_snapshot(session: Session, clients=None, snapshot_date: date | None = N
 
     counts: dict[str, int] = {}
     unique: dict[tuple[str, str], object] = {}
+    raw: dict[tuple[str, str], object] = {}
     try:
-        for client in clients or default_clients():
+        for client in clients:
             markets = client.fetch_markets()
             counts[client.source] = len(markets)
             for m in markets:  # sources may list a market twice (shared events, page overlap): keep the first
-                unique.setdefault((m.source, m.external_id), harmonize(m, now))
+                if (m.source, m.external_id) not in unique:
+                    unique[(m.source, m.external_id)], raw[(m.source, m.external_id)] = harmonize(m, now), m
     except Exception as exc:  # a crashing client must not leave the run marked "running"
         logger.exception("snapshot run %d failed while fetching", run.id)
         run.status, run.note, run.finished_at = "failed", f"fetch error: {exc}"[:512], utcnow()
@@ -70,6 +68,7 @@ def take_snapshot(session: Session, clients=None, snapshot_date: date | None = N
     ]
     for start in range(0, len(rows), 5000):  # bulk insert: ~100k markets per day
         session.execute(insert(MarketSnapshot), rows[start : start + 5000])
+    _sync_events(session, run.id, list(raw.values()), now)
     run.source_counts = counts
     run.eligible_count = sum(1 for h in harmonized if h.eligible)
     empty = [s for s, n in counts.items() if n == 0]
@@ -94,3 +93,12 @@ def latest_snapshot_date(session: Session) -> date | None:
 
 def recent_runs(session: Session, limit: int = 30) -> list[SnapshotRun]:
     return list(session.scalars(select(SnapshotRun).order_by(SnapshotRun.id.desc()).limit(limit)))
+
+
+def _sync_events(session: Session, run_id: int, markets: list, now: datetime) -> None:
+    """Bundle the day's markets into events; a failure is logged and never breaks the snapshot."""
+    try:
+        with session.begin_nested():
+            sync_events(session, markets, now)
+    except Exception:
+        logger.exception("snapshot run %d: event bundling failed", run_id)

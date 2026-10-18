@@ -21,7 +21,7 @@ from backend.app.history import DEFAULT_DAYS, MAX_DAYS
 from backend.app.schemas import RuleSpec
 from backend.app.stocks.attribution import stock_attribution
 from backend.app.stocks.correlation import DEFAULT_MIN_STOCK_MOVE, index_correlation
-from backend.app.stocks.prices import fetch_closes, price_status, refresh_prices
+from backend.app.stocks.prices import price_status, refresh_prices
 from backend.app.stocks.trades import stock_trades
 from backend.app.stocks.universe import TOP_US_STOCKS
 
@@ -30,8 +30,8 @@ router = APIRouter(tags=["stocks"])
 
 
 def get_fetcher():
-    """Price source as a dependency so tests never reach the network."""
-    return fetch_closes
+    """Price source as a dependency (None: the raw data layer) so tests never reach the network."""
+    return None
 
 
 @router.get("/stocks/status")
@@ -42,7 +42,7 @@ def stocks_status(session=Depends(get_session)) -> dict:
 @router.post("/stocks/refresh")
 def stocks_refresh(backfill: bool = False, session=Depends(get_session), fetcher=Depends(get_fetcher)) -> dict:
     logger.info("stock price refresh requested (backfill=%s)", backfill)
-    return {**refresh_prices(session, fetcher, backfill=backfill), "status": price_status(session)}
+    return {**refresh_prices(session, fetcher, backfill=backfill, trigger="stocks"), "status": price_status(session)}
 
 
 MinChange = Query(0.0, ge=0, le=1, description="index change (0..1 scale) that counts as an up/down event")

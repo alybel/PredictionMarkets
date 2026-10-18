@@ -1,5 +1,697 @@
 # FeatureMap.yaml — Feature-Register (verwaltet von DevConsole)
 # Status: idee | geplant | in-arbeit | umgesetzt | abgeloest
+- id: 1018-2043-markt-gruppen-als-gruppenmarkt-b
+  name: Markt-Gruppen als Gruppenmarkt behandeln
+  status: umgesetzt
+  beschreibung: Jede Markt-Gruppe wird gruppiert behandel. Es gibt hunderte Märkte zu SP500.
+    Diese werden für den Bau von Metriken als ein Gruppenmarkt dargestellt, weil man sich
+    sonst in den Details verliert.
+  testdateien:
+  - backend/tests/test_directory_groups.py
+  kontext: Marktverzeichnis
+- id: 1017-1426-architektur-test-externe-api-auf
+  name: 'Architektur-Test: externe API-Aufrufe nur in der Rohdatenschicht'
+  status: umgesetzt
+  beschreibung: 'Ein automatischer Test sichert die Layered Architecture ab: Außerhalb der
+    Rohdatenschicht darf kein Code externe APIs aufrufen (z. B. requests, httpx, urllib).
+
+    Der Test läuft in CI auf einem frischen Clone ohne lokale Dateien.'
+  kriterien:
+  - Der Architektur-Test ist Teil der Test-Suite und grün.
+  - Ein absichtlich eingefügter HTTP-Aufruf in einem Businessprozess lässt den Test fehlschlagen.
+  - Der Test braucht weder Netzwerk noch lokale Konfiguration.
+  tests:
+  - Scan aller Module außerhalb der Rohdatenschicht findet keine HTTP-Bibliotheken.
+  - 'Negativfall: ein Testmodul mit HTTP-Import außerhalb der Rohdatenschicht wird als Verstoß
+    erkannt.'
+  testdateien:
+  - backend/tests/test_architecture_layers.py
+  - backend/tests/test_fed_raw_layer.py
+  - backend/tests/test_probe_collect.py
+  - backend/tests/test_probe_merge.py
+  gruppe: grp-1017-1426-7ca2
+  rang: 3
+- id: 1017-1426-ubrige-businessprozesse-auf-die
+  name: Übrige Businessprozesse auf die Rohdatenschicht umstellen
+  status: umgesetzt
+  beschreibung: 'Domänen-Suche (domains/discovery.py), Preis-Historie (backfill/sources.py),
+    Index-Abruf/EUI (clients/) und Aktienkurse (stocks/prices.py) verlieren ihre eigenen API-Aufrufe.
+
+    Ihre Abrufe wandern in die zentrale Abruf-Stelle der Rohdatenschicht (API -> Staging ->
+    raw_responses); die Prozesse lesen nur noch aus Rohdaten und Metriken und stellen bei
+    Bedarf eine Aktualisierungsanfrage.
+
+    Bestehende verarbeitete Daten bleiben erhalten; die Rohdatenschicht füllt sich für diese
+    Prozesse beim ersten zentralen Abruf.
+
+    Bestehende Funktionen und Ergebnisse bleiben unverändert.'
+  kriterien:
+  - Domänen, Preis-Historie, Index-Abruf/EUI und Aktienkurse enthalten keinen direkten HTTP-Aufruf
+    mehr.
+  - Jeder dieser Prozesse liest aus raw_responses und kann eine Aktualisierungsanfrage stellen.
+  - Die Ergebnisse (Märkte, Preise, Indexwerte, Kurse) sind bei gleichen Rohdaten identisch
+    zu vorher.
+  - Bestehende Daten in der Datenbank bleiben erhalten.
+  - Alle bisherigen Tests sind grün; Changelog.md und Requirements.log sind aktualisiert.
+  tests:
+  - 'Je Prozess: Aufbau aus vorbereiteten raw_responses liefert dieselben Ergebnisse wie die
+    bisherige Verarbeitung der gleichen Antwort.'
+  - 'Je Prozess: Aktualisierungsanfrage mit gemocktem Abruf landet in Staging und raw_responses;
+    kein Netzwerkzugriff im Test.'
+  - Fehlende Rohdaten führen zu einer klaren Meldung statt zu einem Live-Abruf.
+  testdateien:
+  - backend/tests/test_raw_layer_processes.py
+  - backend/tests/test_domain_discovery.py
+  - backend/tests/test_raw_layer_directory.py
+  gruppe: grp-1017-1426-7ca2
+  rang: 2
+- id: 1017-1426-rohdatenschicht-als-zentraler-ap
+  name: Rohdatenschicht als zentraler API-Zugang + Marktverzeichnis liest nur Rohdaten
+  status: umgesetzt
+  beschreibung: 'Layered Architecture: Rohdatenschicht (API -> Staging -> raw_responses) ->
+    Metriken -> Businessprozesse.
+
+    Nur die Rohdatenschicht spricht mit externen APIs. Businessprozesse lesen nur aus Rohdaten
+    und Metriken und dürfen keine eigenen Rohdatenprozesse haben.
+
+    Phase 1:
+
+    - Zentrale Abruf-Stelle in der Rohdatenschicht nimmt Aktualisierungsanfragen entgegen.
+
+    - Anfragen laufen im Hintergrund mit Fortschrittsanzeige; doppelte/parallele Abrufe derselben
+    Daten werden verhindert.
+
+    - Die Abrufe des Marktverzeichnisses (directory/sources.py) wandern in die Rohdatenschicht.
+
+    - Das Marktverzeichnis (Workshop Schritt 1) wird nur noch aus raw_responses aufgebaut,
+    ohne eigenen Live-Abruf.
+
+    - Der Knopf in Schritt 1 heißt „Rohdaten aktualisieren“ und stellt nur die Aktualisierungsanfrage;
+    danach wird das Verzeichnis aus den Rohdaten neu aufgebaut.
+
+    - Logging: jede Anfrage mit Auslöser, Start, Ende, Ergebnis und Fehlern; Klicks im app.log.
+
+    - Bestehende Funktionen bleiben unverändert erhalten.'
+  kriterien:
+  - Workshop Schritt 1 zeigt Märkte, die aus raw_responses aufgebaut wurden, ohne Live-Abruf
+    im Verzeichnis-Code.
+  - Im Paket directory gibt es keinen direkten HTTP-Aufruf mehr.
+  - Eine Aktualisierungsanfrage kehrt sofort zurück, der Fortschritt ist in der Oberfläche
+    sichtbar.
+  - Eine zweite Anfrage während eines laufenden Abrufs startet keinen parallelen Abruf.
+  - Anfragen und Klicks stehen im app.log.
+  - Alle bisherigen Tests sind grün; Changelog.md und Requirements.log sind aktualisiert.
+  tests:
+  - Verzeichnis-Aufbau aus vorbereiteten raw_responses (Polymarket und Kalshi) ergibt die
+    erwarteten Märkte, Status und Daten.
+  - Wiederholter Aufbau aus denselben Rohdaten ändert nichts (idempotent).
+  - Aktualisierungsanfrage mit gemocktem Abruf schreibt Staging und raw_responses und baut
+    danach das Verzeichnis auf; kein Netzwerkzugriff im Test.
+  - Zweite Anfrage während eines laufenden Abrufs wird erkannt und startet keinen zweiten
+    Abruf.
+  - Fehlerhafte Rohantwort wird gezählt und geloggt und stoppt den Aufbau nicht.
+  - 'API-Test: Workshop-Schritt-1-Status zählt Märkte aus dem neu aufgebauten Verzeichnis.'
+  testdateien:
+  - backend/tests/test_raw_layer_directory.py
+  - backend/tests/test_market_directory.py
+  - backend/tests/test_risk_workshop.py
+  - backend/tests/test_migration.py
+  screenshot: .devconsole/features/1017-1426-rohdatenschicht-als-zentraler-ap.png
+  gruppe: grp-1017-1426-7ca2
+  rang: 1
+- id: 1017-1107-risiko-index-7-7-assistent-risik
+  name: Risiko-Index 7/7 – Assistent „Risiko-Index-Werkstatt“ (geführter Ablauf Schritt 1–5)
+  status: umgesetzt
+  beschreibung: '- Neuer Tab „Risiko-Index-Werkstatt“, der durch die fünf Schritte führt:
+    Rohdaten → Themen-Einordnung/Prüfliste → Ketten-Metriken → Gewichtung → Prognosekraft.
+
+    - Je Schritt sichtbar: Status (offen/in Arbeit/erledigt), offene Aufgaben (z. B. ungeprüfte
+    Märkte, neue Märkte im Eingangskorb), KI-Vorschlag und Freigabe durch den Menschen.
+
+    - Nutzt ausschließlich die Funktionen aus Ticket 1–6; bestehende Tabs bleiben erreichbar.
+
+    - Pilot-Thema „Marktcrash-Risiko“ ist vorbelegt; weitere Themen lassen sich anlegen.
+
+    - Logging: Schrittwechsel, Klicks, Freigaben.'
+  kriterien:
+  - Für „Marktcrash-Risiko“ lässt sich der ganze Weg in der Werkstatt durchklicken bis zum
+    Prognosekraft-Bericht.
+  - Jeder Schritt zeigt Status und offene Aufgaben korrekt an.
+  - Kein KI-Vorschlag wird ohne Bestätigung durch den Menschen wirksam.
+  - Bestehende Tabs funktionieren unverändert.
+  - Alle Klicks und Schrittwechsel stehen im app.log; Changelog.md und Requirements.log sind
+    ergänzt.
+  tests:
+  - 'Status-Endpunkt: Thema ohne geprüfte Märkte → Schritt 2 offen; nach Annahme → erledigt.'
+  - Offene Aufgaben zählen ungeprüfte und neue Märkte korrekt.
+  - 'Ende-zu-Ende mit gefakten KI-Antworten und gemockten Quellen: Thema → Index → Bericht.'
+  - Statische JS-Prüfung (test_static_js) läuft durch.
+  - Keine echten LLM- und Netzwerkaufrufe.
+  testdateien:
+  - backend/tests/test_risk_workshop.py
+  - backend/tests/test_static_js.py
+  gruppe: grp-1017-1107-6048
+  rang: 7
+- id: 1017-1107-risiko-index-6-7-prognosekraft-b
+  name: Risiko-Index 6/7 – Prognosekraft-Bericht gegen Aktien-, Anleihen- und Volatilitätsmarkt
+  status: umgesetzt
+  beschreibung: '- Zielgrößen: S&P 500, 10-jährige US-Rendite und TLT, VIX (Kurse wie bisher
+    ohne Live-Abhängigkeit in Tests).
+
+    - Zeiträume 1, 5 und 20 Handelstage; Korrelation, Regression und Trefferquote für Rückgänge
+    über 10 % innerhalb von 30 Tagen (Crash-Trefferquote).
+
+    - Walk-Forward: Prognosekraft nur außerhalb des Zeitraums gemessen, auf dem Gewichte festgelegt
+    wurden; Point-in-Time-Regel gilt weiter.
+
+    - Eine verständliche Gesamtkennzahl „Prognosekraft“ je Zielgröße mit Ampel und Erklärung.
+
+    - Läuft automatisch beim Speichern eines Index und täglich.
+
+    - Bei Historie unter 3 Jahren deutlicher Hinweis im Bericht.
+
+    - Bestehende Top-100-Aktien-Auswertung (Korrelation, Regression, Signal-Precision) bleibt
+    unverändert.
+
+    - Logging: jeder Lauf (Index, Zielgröße, Zeitraum, Anzahl Tage, Ergebnis).'
+  kriterien:
+  - Für einen Metrik-Index zeigt der Bericht S&P 500, Anleihen und VIX über 1/5/20 Tage plus
+    Crash-Trefferquote.
+  - Die Gesamtkennzahl ist je Zielgröße sichtbar und erklärt.
+  - Der Bericht entsteht automatisch beim Speichern und im täglichen Lauf.
+  - Kein Wert nutzt Informationen nach dem Stichtag.
+  - Historie unter 3 Jahren zeigt einen sichtbaren Hinweis.
+  - Top-100-Auswertung liefert unveränderte Ergebnisse.
+  - Changelog.md und Requirements.log sind ergänzt.
+  tests:
+  - Synthetische Daten mit eingebautem 5-Tage-Vorlauf → Vorlauf wird gefunden; reiner Zufall
+    → keine signifikante Prognosekraft.
+  - 'Walk-Forward: Testzeitraum nutzt keine Daten aus dem Festlegungszeitraum und keine späteren
+    Daten.'
+  - Crash-Trefferquote auf konstruierter Reihe mit bekannten Rückgängen korrekt.
+  - 'Zeitlogik: kein Paar über Datenlücken > MAX_GAP_DAYS; PIT-Prüfung greift.'
+  - Endpunkt liefert 200 mit vollständiger Struktur, unbekannter Index → 404.
+  - 'Regression: Top-100-Endpunkte liefern unveränderte Ergebnisse.'
+  - Keine Netzwerk- und keine LLM-Aufrufe.
+  testdateien:
+  - backend/tests/test_forecast_power.py
+  - backend/tests/test_forecast_api.py
+  gruppe: grp-1017-1107-6048
+  rang: 6
+- id: 1017-1107-risiko-index-5-7-ki-vorschlag-fu
+  name: Risiko-Index 5/7 – KI-Vorschlag für Gewichtung des Index
+  status: umgesetzt
+  beschreibung: '- Im Index-Builder (nur validierte Metriken, wie bisher) wählbare Gewichtungsverfahren:
+    gleichgewichtet, nach Liquidität, inverse Volatilität, manuell.
+
+    - Die KI (Sonnet) schlägt Verfahren und Gewichte mit Begründung vor; der Mensch bestätigt
+    oder ändert, erst dann wirken sie.
+
+    - Gewichte werden nur aus Daten bis zum jeweiligen Stichtag berechnet (kein Blick in die
+    Zukunft).
+
+    - Bestehende manuelle Gewichtung und z-Standardisierung bleiben unverändert.
+
+    - Logging: Vorschläge, Verfahrenswahl, Bestätigen/Ändern.'
+  kriterien:
+  - Alle vier Verfahren sind im Builder wählbar und liefern Gewichte, die sich zu 100 % addieren.
+  - Der KI-Vorschlag zeigt Verfahren, Gewichte und Begründung und wirkt erst nach Bestätigung.
+  - Bestehende Indizes liefern unveränderte Werte.
+  - Changelog.md und Requirements.log sind ergänzt.
+  tests:
+  - 'Gleichgewichtet: drei Metriken → je 1/3.'
+  - 'Inverse Volatilität: ruhigere Metrik erhält höheres Gewicht (synthetische Daten).'
+  - 'Nach Liquidität: Gewichte proportional zur Liquidität.'
+  - 'Stichtag: Gewichte ändern sich nicht durch Daten nach dem Stichtag.'
+  - Gefakter KI-Vorschlag mit unbekannter Metrik → verworfen, geloggt.
+  - 'Regression: bestehender Index liefert dieselben Werte.'
+  testdateien:
+  - backend/tests/test_index_weighting.py
+  - backend/tests/test_metric_index_builder.py
+  - backend/tests/test_index_builder.py
+  gruppe: grp-1017-1107-6048
+  rang: 5
+- id: 1017-1107-risiko-index-4-7-ketten-nur-noch
+  name: 'Risiko-Index 4/7 – Ketten nur noch aus angenommenen Märkten (ersetzt direkten Domänen-Weg
+    aus #58)'
+  status: umgesetzt
+  beschreibung: '- Ketten-Vorschläge (Sonnet) entstehen ausschließlich aus den in der Prüfliste
+    (Ticket 2) angenommenen Märkten eines Themas, mit deren Lesart.
+
+    - Der direkte Weg aus #58 (Agent schlägt Ketten direkt aus Domänen-Rohdaten vor) entfällt.
+    Der Modus „Metriken anlegen“ führt in die Themen-Prüfliste; der Bauplan aus #53 zieht
+    mit um.
+
+    - Erhalten bleiben: Kettenrechnung, festes Regelwerk, Historien-/Liquiditätsprüfung am
+    Vorschlag, strukturierte Speicherung als draft, Metrik-Katalog mit Prüfungen und Freigabe.
+    Bereits angelegte Ketten-Metriken rechnen unverändert weiter.
+
+    - Agent-Schritt 1 „Metriken finden“ (#57) bleibt unverändert.
+
+    - Requirements.log: #58 → superseded mit Verweis auf dieses Ticket; bei #53 Hinweis zum
+    Umzug des Bauplans.
+
+    - Logging: Vorschläge, verworfene Referenzen, Übernahme-Klicks.'
+  kriterien:
+  - Ketten-Vorschläge enthalten nur angenommene Märkte des gewählten Themas.
+  - Der Modus „Metriken anlegen“ schlägt keine Märkte außerhalb der Prüfliste mehr vor.
+  - Übernommene Ketten werden strukturiert als draft gespeichert und durchlaufen die Prüfungen.
+  - 'Bestehende Ketten-Metriken aus #58 liefern unveränderte Werte.'
+  - 'Requirements.log (#58 superseded, Hinweis #53) und Changelog.md sind aktualisiert.'
+  tests:
+  - Gefakter Agent schlägt abgelehnten oder unbekannten Markt vor → verworfen, Warnung geloggt.
+  - Vorschlag mit angenommenen Märkten → Kette mit Lesart aus der Prüfliste.
+  - 'Übernahme: strukturierte Speicherung, Status draft, Prüfungen laufen.'
+  - 'Regression: bestehende Ketten-Metrik aus #58 liefert dieselben Werte.'
+  - Agent-Schritt 1 „Metriken finden“ liefert unveränderte Ergebnisse.
+  - Keine echten LLM-Aufrufe.
+  testdateien:
+  - backend/tests/test_metric_creator.py
+  - backend/tests/test_index_agent_api.py
+  - backend/tests/test_agent_history_check.py
+  - backend/tests/test_metric_chain.py
+  - backend/tests/test_metric_finder.py
+  gruppe: grp-1017-1107-6048
+  rang: 4
+- id: 1017-1107-risiko-index-3-7-risiko-lesarten
+  name: Risiko-Index 3/7 – Risiko-Lesarten „Unsicherheit“ und „Volatilität“ im Regelwerk
+  status: umgesetzt
+  beschreibung: '- Das feste, ausführbare Regelwerk (chain_rules) wird um zwei Lesarten erweitert:
+    Unsicherheit (1 − 2·|p − 0,5|) und Volatilität (Schwankung der Tagesänderungen über 20
+    Handelstage).
+
+    - Bestehende Lesarten steigend (p) und fallend (1 − p) bleiben unverändert.
+
+    - Volatilität wird nur aus Tagesänderungen innerhalb eines Glieds berechnet (kein Roll-Sprung),
+    Lücken bleiben leer, kein Vorwärtsauffüllen.
+
+    - Die Lesart ist pro Metrik/Glied gespeichert und im Metrik-Katalog sichtbar.
+
+    - Logging: Rechenläufe je Lesart.'
+  kriterien:
+  - Beide neuen Lesarten sind im Regelwerk auswählbar und werden in der Kettenrechnung ausgeführt.
+  - Bestehende Ketten- und Korb-Metriken liefern unveränderte Werte.
+  - Die Lesart ist im Metrik-Katalog je Metrik sichtbar.
+  - Changelog.md und Requirements.log sind ergänzt.
+  tests:
+  - 'Unsicherheit: p = 0,5 → 1; p = 0,1 und p = 0,9 → 0,2.'
+  - 'Volatilität: Reihe mit konstanter Tagesänderung → 0; bekannte Reihe → erwartete Standardabweichung.'
+  - 'Volatilität über Roll-Tag: Sprung zwischen Gliedern fließt nicht ein.'
+  - 'Lücken: Tage ohne Preis bleiben leer, Fenster unter Mindestlänge liefert keinen Wert.'
+  - 'Regression: bestehende Ketten-Metrik und Korb-Metrik liefern dieselben Werte wie vorher.'
+  testdateien:
+  - backend/tests/test_risk_readings.py
+  - backend/tests/test_metric_chain.py
+  - backend/tests/test_metric_catalog_ui.py
+  gruppe: grp-1017-1107-6048
+  rang: 3
+- id: 1017-1107-risiko-index-2-7-themen-einordnu
+  name: Risiko-Index 2/7 – Themen-Einordnung mit Haiku, Prüfliste (Annehmen/Ablehnen) und
+    Zeitleiste
+  status: umgesetzt
+  beschreibung: '- Ein Thema (Pilot: „Marktcrash-Risiko“) bekommt eine Risiko-Frage und optionale
+    Suchbegriffe; Themen werden allgemein gebaut, damit weitere folgen können.
+
+    - Vorfilter (Tags/Suchbegriffe) aus dem Marktverzeichnis (Ticket 1), dann stuft Haiku
+    je Markt ein: relevant ja/nein, Begründung, vorgeschlagene Risiko-Lesart (hoch = Risiko
+    p, niedrig = Risiko 1 − p, Unsicherheit 1 − 2·|p − 0,5|, Volatilität).
+
+    - Jeder Markt wird je Thema nur einmal eingestuft (gespeichert, wiederverwendet); neue
+    Märkte aus dem Eingangskorb werden automatisch eingestuft.
+
+    - Prüfliste: Mensch nimmt an oder lehnt ab und kann die Lesart ändern; nur angenommene
+    Märkte gehen weiter.
+
+    - Zeitleiste über mindestens 3 Jahre: welche relevanten Märkte wann existierten. Ist die
+    Historie kürzer, wird sie angezeigt mit deutlichem Hinweis.
+
+    - Ein Markt zählt erst ab seinem Startdatum (kein Rückschau-Effekt).
+
+    - Bestehende Einstufung des Economic Uncertainty Index bleibt unverändert.
+
+    - Logging: jede Einstufung (Anzahl, Modell, verworfene Antworten), jedes Annehmen/Ablehnen/Ändern.'
+  kriterien:
+  - Für das Thema „Marktcrash-Risiko“ liefert die App eine Liste eingestufter Märkte mit Begründung
+    und Lesart-Vorschlag.
+  - Annehmen, Ablehnen und Ändern der Lesart sind per Klick möglich und werden gespeichert.
+  - Die Zeitleiste zeigt mindestens 3 Jahre oder die tatsächlich kürzere Historie mit sichtbarem
+    Hinweis.
+  - Kein Markt wird für dasselbe Thema zweimal an Haiku gesendet.
+  - KI-Antworten mit unbekannter Markt-ID oder ungültiger Lesart werden verworfen und geloggt.
+  - Ohne API-Schlüssel läuft ein gekennzeichneter Fallback, die Pipeline bricht nicht ab.
+  - Changelog.md und Requirements.log sind ergänzt.
+  tests:
+  - 'Gefakter Haiku-Klassifizierer: Antwort mit unbekannter ID → verworfen, Warnung geloggt.'
+  - 'Zweiter Lauf: bereits eingestufte Märkte werden nicht erneut gesendet.'
+  - Annehmen/Ablehnen über die API ändert den Status; abgelehnte Märkte erscheinen nicht in
+    der Weitergabe.
+  - 'Zeitleiste: Markt erscheint erst ab seinem Startdatum; Historie unter 3 Jahren erzeugt
+    den Hinweis.'
+  - Neuer Markt aus dem Eingangskorb wird automatisch eingestuft.
+  - Keine echten LLM-Aufrufe, keine Netzwerkaufrufe.
+  testdateien:
+  - backend/tests/test_risk_topics.py
+  gruppe: grp-1017-1107-6048
+  rang: 2
+- id: 1017-1107-risiko-index-1-7-marktverzeichni
+  name: Risiko-Index 1/7 – Marktverzeichnis aller Märkte und Eingangskorb „Neue Märkte“
+  status: umgesetzt
+  beschreibung: 'Teil 1 der Pipeline „Marktbasierter Risiko-Index“ (Pilot-Thema: Marktcrash-Risiko).
+
+    - Gesamtverzeichnis aller Märkte von Kalshi und Polymarket, die heute über die APIs abrufbar
+    sind, inklusive abgelaufener/aufgelöster Märkte: Quelle, externe ID, Titel, Tags, Startdatum
+    (Listung), Enddatum, Status (aktiv/abgelaufen/aufgelöst), erstmals gesehen am.
+
+    - Rohantworten laufen über den bestehenden Staging-/Raw-Weg (nie überschreiben, idempotent,
+    keine Duplikate per DB-Eindeutigkeitsregel).
+
+    - Neue Märkte werden beim täglichen Lauf erkannt, markiert und im eigenen Eingangskorb
+    „Neu seit …“ angezeigt.
+
+    - Historische Verfügbarkeit: je Markt sichtbar, von wann bis wann er existierte; Übersicht
+    der Abdeckung je Jahr und Quelle (gemessen, nicht versprochen).
+
+    - Bestehende Funktionen (Snapshot, Domänen, Datenkatalog, Fed-Staging) bleiben unverändert.
+
+    - Logging: jeder Ladelauf (gefunden/neu/übersprungen/Fehler je Quelle), Klicks im Eingangskorb.'
+  kriterien:
+  - Das Verzeichnis enthält aktive und abgelaufene Märkte beider Quellen mit Start-, Enddatum
+    und Status.
+  - Ein zweiter Ladelauf ohne neue Daten fügt keine Zeilen hinzu und ändert keine bestehenden.
+  - Ein neu gelisteter Markt erscheint nach dem täglichen Lauf genau einmal im Eingangskorb
+    „Neu“.
+  - Die Abdeckung je Jahr und Quelle ist in der Oberfläche sichtbar.
+  - Fehlerhafte oder leere Quellantworten brechen den Lauf nicht ab und stehen im app.log.
+  - Bestehende Datenkatalog-, Domänen- und Snapshot-Endpunkte liefern unveränderte Ergebnisse.
+  - Changelog.md und Requirements.log sind ergänzt.
+  tests:
+  - Gemockte Quellantworten mit aktivem und aufgelöstem Markt → beide im Verzeichnis mit korrektem
+    Status und Datum.
+  - 'Idempotenz: zweimal laden ergibt dieselbe Zeilenzahl; direktes Doppel-Einfügen wird von
+    der DB abgewiesen.'
+  - Neuer Markt im zweiten Lauf → genau ein Eintrag „neu“; bereits bekannter Markt → nicht
+    neu.
+  - Abdeckung je Jahr wird aus Start-/Enddaten korrekt gezählt.
+  - Kaputte Quellantwort → protokolliert, übrige Märkte werden geladen.
+  - 'Regression: bestehende Katalog- und Domänen-Endpunkte liefern dieselben Felder.'
+  - Keine Netzwerk- und keine LLM-Aufrufe in Tests.
+  testdateien:
+  - backend/tests/test_market_directory.py
+  gruppe: grp-1017-1107-6048
+  rang: 1
+- id: 1016-2013-ki-agent-schritt-2-fehlende-metr
+  name: KI-Agent Schritt 2 – fehlende Metriken anlegen (ausführbare Ketten-Regeln)
+  status: umgesetzt
+  beschreibung: 'Der KI-Agent hilft im zweiten, getrennten Schritt, fehlende Metriken aus
+    den Domänen-Rohdaten anzulegen.
+
+    - Eingang: nicht abgedeckte Aspekte aus Schritt 1 oder direkte Idee.
+
+    - Der Agent sucht nur in Domänen-Rohdaten (volle Historie) und schlägt Metriken vor: Einzelmarkt
+    oder Kette, mit Regeln ausschließlich aus einem festen, ausführbaren Regelkatalog (Richtung
+    steigend/fallend = 1 − p, Roll am Enddatum, Front-Kette bei parallelen Gliedern / konstante
+    Restlaufzeit, Lücken nicht auffüllen, Ablauf ohne Vorwärtsauffüllen).
+
+    - Freitext-Regeln des Modells werden nicht ausgeführt, sondern sichtbar als „Hinweis,
+    nicht automatisch umgesetzt“ angezeigt.
+
+    - Vor dem Vorschlag prüft der Agent Historie (≥ 180 Handelstage, Lücken) und Liquidität;
+    Ergebnis steht am Vorschlag.
+
+    - Liegt die Idee in keiner Domäne, sagt der Agent das und schlägt eine neue Domäne vor
+    statt mit dünnen Daten weiterzuarbeiten.
+
+    - „Als Metrik-Entwurf übernehmen“ speichert die Metrik STRUKTURIERT (Glieder mit Roll-Tag,
+    Richtung, Regeln) statt nur als Text; Status startet als draft, bestehende Prüfungen laufen,
+    Freigabe bleibt manuell.
+
+    - Neue Rechenart für Ketten-Metriken, die die Regeln wirklich ausführt: je Tag nur das
+    aktive Glied, Tagesänderung nur innerhalb eines Glieds (kein Sprung am Roll-Tag), Richtung
+    gedreht, Lücken offen. Wiederverwendung der Ketten-Logik der Fed-Zinsketten. Ausgabe als
+    Wahrscheinlichkeitsniveau des aktiven Glieds plus verkettete Reihe.
+
+    - Modell: Sonnet. Jede Referenz wird gegen die Rohdaten validiert.
+
+    - Bestehende Markt-Korb-Metriken (#45) bleiben unverändert erhalten und rechnen wie bisher
+    (keine Funktion wird entfernt). Hinweis Requirements.log: berührt #45 und #53 – vor Umsetzung
+    klären.
+
+    - Logging: Vorschläge, verworfene Referenzen, Übernahme-Klicks, Rechenläufe je Ketten-Metrik.'
+  kriterien:
+  - Im Modus „Metriken anlegen“ schlägt der Agent Einzelmärkte und Ketten aus Domänen-Rohdaten
+    mit Regeln aus dem festen Katalog vor.
+  - Jeder Vorschlag zeigt Historienlänge, Lücken und Liquidität; unter 180 Handelstagen mit
+    Warnhinweis.
+  - Freitext-Regeln erscheinen als „Hinweis, nicht automatisch umgesetzt“ und beeinflussen
+    die Rechnung nicht.
+  - Ohne passende Domäne meldet der Agent das und schlägt eine Domäne vor.
+  - Übernommene Ketten-Metriken werden strukturiert gespeichert, starten als draft und durchlaufen
+    die Prüfungen.
+  - Die Ketten-Rechnung zeigt am Roll-Tag keinen Sprung, fallende Glieder gehen als 1 − p
+    ein, Lücken bleiben leer.
+  - Bestehende Korb-Metriken liefern unveränderte Werte.
+  - Vorschläge und Übernahmen stehen im app.log; Changelog.md und Requirements.log sind ergänzt.
+  tests:
+  - 'Ketten-Rechnung: zwei Glieder mit Roll-Tag → verkettete Reihe ohne Sprung am Roll-Tag.'
+  - 'Parallele Glieder: je Tag wird das nächstfällige Glied verwendet (Front-Kette).'
+  - 'Richtung fallend: Preis 0,3 geht als 0,7 ein.'
+  - 'Lücke zwischen Gliedern: keine Werte an Lückentagen, kein Vorwärtsauffüllen.'
+  - 'Validierung: Vorschlag mit unbekannter Referenz oder Regel außerhalb des Katalogs → verworfen
+    bzw. als Hinweis geführt, Warnung geloggt.'
+  - 'Übernahme: strukturierte Speicherung, Status draft, Prüfungen laufen.'
+  - 'Regression: bestehende Korb-Metrik liefert dieselben Werte wie vorher.'
+  - Agent mit Fake (keine echten LLM-Aufrufe), Quellabrufe gemockt.
+  testdateien:
+  - backend/tests/test_metric_chain.py
+  - backend/tests/test_metric_creator.py
+  gruppe: grp-1016-2013-8457
+  rang: 3
+- id: 1016-2013-ki-agent-schritt-1-vorhandene-me
+  name: KI-Agent Schritt 1 – vorhandene Metriken finden
+  status: umgesetzt
+  beschreibung: 'Der KI-Agent hilft im ersten Schritt der Index-Entwicklung, zu einer Idee
+    passende VORHANDENE Metriken zu finden. Metrik = qualitätsgesicherter Einzelmarkt oder
+    Kette von Märkten mit definierten Regeln.
+
+    - Tab „KI-Agent“ bekommt zwei getrennte Modi: „Metriken finden“ (dieses Ticket) und „Metriken
+    anlegen“ (Folgeticket).
+
+    - Der Agent durchsucht nur den Metrik-Katalog (nicht die Rohdaten) und zeigt je Treffer:
+    Begründung, Historienlänge, Prüfergebnisse, Status (draft/validated/blocked).
+
+    - Gesperrte Metriken und Metriken mit zu kurzer Historie werden sichtbar markiert, nicht
+    weggelassen.
+
+    - „Ausreichende Historie“ = mindestens 180 Handelstage (Voreinstellung, als Konstante);
+    darunter Warnhinweis.
+
+    - Der Agent nennt am Ende die Aspekte der Idee, die keine vorhandene Metrik abdeckt; diese
+    lassen sich mit einem Klick an den Modus „Metriken anlegen“ übergeben.
+
+    - Treffer lassen sich für den Index-Builder vormerken.
+
+    - Modell: Haiku. Agent-Antwort als strukturiertes JSON; jede genannte Metrik wird gegen
+    den Katalog validiert (unbekannte Keys verworfen und geloggt).
+
+    - Logging: jede Anfrage, Treffer-Anzahl, verworfene Keys, Vormerken-Klicks.
+
+    - Hinweis Requirements.log: berührt Eintrag #53 (Agent baut Index-Startpunkt). Vor Umsetzung
+    klären (keep/replace/combine); bis dahin bleibt die bestehende Bauplan-Funktion erreichbar.'
+  kriterien:
+  - Im Tab „KI-Agent“ gibt es die zwei Modi „Metriken finden“ und „Metriken anlegen“.
+  - Zu einer Idee listet der Agent passende Katalog-Metriken mit Begründung, Historienlänge,
+    Prüfergebnis und Status.
+  - Metriken unter 180 Handelstagen oder mit Status blocked sind sichtbar markiert.
+  - Der Agent kann keine Metrik nennen, die nicht im Katalog existiert.
+  - Nicht abgedeckte Aspekte werden angezeigt und lassen sich an „Metriken anlegen“ übergeben.
+  - Vorgemerkte Metriken erscheinen im Index-Builder zur Auswahl.
+  - Anfragen und Klicks stehen im app.log; Changelog.md und Requirements.log sind ergänzt.
+  tests:
+  - 'Validierung: Agent-Antwort mit unbekanntem Metrik-Key → Key verworfen, Warnung geloggt.'
+  - 'Markierung: Metrik mit 179 Tagen bekommt Warnhinweis, mit 180 Tagen nicht; blocked-Metrik
+    bleibt in der Liste mit Markierung.'
+  - Nicht abgedeckte Aspekte werden aus der strukturierten Antwort übernommen und übergeben.
+  - API-Endpunkt mit gefaktem Agenten (keine echten LLM-Aufrufe) liefert Treffer, Status und
+    Lücken.
+  - 'Vormerken: vorgemerkte Metrik ist im Index-Builder auswählbar.'
+  testdateien:
+  - backend/tests/test_metric_finder.py
+  gruppe: grp-1016-2013-8457
+  rang: 2
+- id: 1016-2013-domanen-mit-vollstandiger-rohdat
+  name: Domänen mit vollständiger Rohdaten-Historie
+  status: umgesetzt
+  beschreibung: 'Grundlage für die Index-Entwicklung: Auf der Rohdaten-Ebene lassen sich Domänen
+    definieren, für die immer die gesamte Historie gezogen wird.
+
+    - Domäne = Name + Thema/Unterthema aus dem Themenbaum + optionale Suchbegriffe (Empfehlung
+    (c), offene Frage mit dieser Voreinstellung entschieden).
+
+    - Domänen anlegen, ansehen, ändern, löschen (Oberfläche + API, gespeichert in der Datenbank).
+
+    - Für alle Märkte einer Domäne wird die vollständige Tageshistorie von Kalshi und Polymarket
+    geladen, AUSDRÜCKLICH inklusive abgelaufener/aufgelöster Märkte (nötig für Kettenglieder).
+    Heute lädt der Backfill nur Märkte, die gerade noch handeln (backend/app/backfill/service.py).
+
+    - Neue Märkte einer Domäne werden beim täglichen Lauf automatisch erkannt und mit voller
+    Historie nachgeladen; vorhandene Zeilen werden nie überschrieben (idempotent), Point-in-Time-Regel
+    bleibt gültig.
+
+    - Je Domäne sichtbar: Anzahl Märkte (aktiv/abgelaufen), frühester und letzter Tag, Lücken,
+    letzter Ladelauf.
+
+    - Logging: Anlegen/Ändern/Löschen einer Domäne, jeder Ladelauf (Märkte, Zeilen, Fehler
+    je Quelle), Button-Klicks.
+
+    - Bestehende Funktionen (Backfill, Datenkatalog, Themenbaum, Agent-Historien-Check) bleiben
+    erhalten.'
+  kriterien:
+  - Eine Domäne lässt sich in der Oberfläche mit Thema/Unterthema und optionalen Suchbegriffen
+    anlegen, ändern und löschen.
+  - Für eine Domäne werden auch abgelaufene/aufgelöste Märkte beider Quellen gefunden und
+    mit ihrer Tageshistorie gespeichert.
+  - Ein zweiter Ladelauf ohne neue Daten fügt keine Zeilen hinzu und ändert keine bestehenden.
+  - Neue Märkte einer Domäne erhalten beim nächsten täglichen Lauf ihre volle Historie.
+  - Die Domänen-Übersicht zeigt Marktanzahl (aktiv/abgelaufen), Historienbeginn, letzten Tag
+    und Lücken.
+  - Ladeläufe und Domänen-Änderungen stehen im app.log.
+  - Changelog.md und Requirements.log sind ergänzt.
+  tests:
+  - 'Domäne anlegen/ändern/löschen über die API (inkl. Validierung: leerer Name, unbekanntes
+    Thema → 400).'
+  - 'Domänen-Zuordnung: Markt mit passendem Thema und Suchbegriff gehört dazu, Markt ohne
+    Suchbegriff-Treffer nicht.'
+  - Abgelaufener Markt (gemockte Quellantwort „settled/closed“) wird geladen und mit Historie
+    gespeichert.
+  - 'Idempotenz: zweimal laden ergibt dieselbe Zeilenzahl, bestehende Zeilen unverändert.'
+  - Fehlerhafte/leere Quellantwort bricht den Ladelauf nicht ab und wird protokolliert.
+  - 'Point-in-Time: geladene Zeilen tragen das Backfill-Kennzeichen und verletzen die Lookahead-Prüfung
+    nicht.'
+  - Alle Quellabrufe gemockt, keine Netzwerk- und keine LLM-Aufrufe.
+  testdateien:
+  - backend/tests/test_domains.py
+  - backend/tests/test_domain_discovery.py
+  screenshot: .devconsole/features/1016-2013-domanen-mit-vollstandiger-rohdat.png
+  gruppe: grp-1016-2013-8457
+  rang: 1
+- id: 1016-1951-mehr-als-zwei-tage-daten-abrufen
+  name: Mehr als zwei Tage Daten abrufen können prüfen
+  status: umgesetzt
+  beschreibung: the ai needs to check if its not possible to pull more data than just two
+    days
+  testdateien:
+  - backend/tests/test_agent_history_check.py
+  - backend/tests/test_index_agent_api.py
+  screenshot: .devconsole/features/1016-1951-mehr-als-zwei-tage-daten-abrufen.png
+- id: 1016-1639-konsolen-zugriff-fur-claude-einr
+  name: Konsolen-Zugriff für Claude einrichten
+  status: umgesetzt
+  beschreibung: Nimm erstmal Claude in der Konsole hierfür
+  testdateien:
+  - backend/tests/test_agent_cli.py
+  - backend/tests/test_index_agent_api.py
+  screenshot: .devconsole/features/1016-1639-konsolen-zugriff-fur-claude-einr.png
+- id: 1016-1617-ki-agent-fur-index-entwurfe-mit
+  name: KI-Agent für Index-Entwürfe mit Datenverkettung und Harmonisierung
+  status: umgesetzt
+  beschreibung: 'very good. I know need an AI Agent baked in here, that assembles me a starting
+    point for an index based on an idea I have. The agent is my companian and looks out for:
+    Which data can be reasonably chained together in an index, how to harmonize the data.
+    Chaining of markets is important to get a history.'
+  testdateien:
+  - backend/tests/test_index_agent.py
+  - backend/tests/test_index_agent_api.py
+  screenshot: .devconsole/features/1016-1617-ki-agent-fur-index-entwurfe-mit.png
+- id: 1016-1549-navigation-nach-themen-und-unter-2
+  name: Navigation nach Themen und Unterthemen
+  status: umgesetzt
+  beschreibung: 'Baumansicht Thema → Unterthema → Event bzw. Markt.
+
+    Setzt auf Teil 1 (Event-Struktur) auf.
+
+
+    (Teil 2/2 von „Navigation nach Themen und Unterthemen; Märkte zu Events bündeln“, 1016-1549-navigation-nach-themen-und-unter)
+
+    Alle Teile in Reihenfolge:
+
+    1. Märkte zu Events bündeln
+
+    2. Navigation nach Themen und Unterthemen ← dieses Ticket
+
+    Setze NUR diesen Teil um und greife späteren Teilen nicht vor.'
+  kriterien:
+  - Die Baumstruktur mit Themen und Unterthemen ist sichtbar und auf- und zuklappbar.
+  - Events erscheinen als Knoten mit ihren Outcome-Märkten.
+  - Die Auswahl eines Knotens zeigt die zugehörigen Daten.
+  - Bestehende Ansichten bleiben erhalten.
+  tests:
+  - Der Baum wird aus der Themenliste korrekt aufgebaut.
+  - Ein Klick auf einen Knoten öffnet oder schließt die Unterebene.
+  - Ein Event-Knoten zeigt alle Outcomes.
+  - Die statische JS-Prüfung (test_static_js) läuft durch.
+  testdateien:
+  - backend/tests/test_topic_tree.py
+  - backend/tests/test_static_js.py
+  screenshot: .devconsole/features/1016-1549-navigation-nach-themen-und-unter-2.png
+  gruppe: grp-1016-1549-6ec5
+  rang: 2
+  teilVon: 1016-1549-navigation-nach-themen-und-unter
+- id: 1016-1549-markte-zu-events-bundeln
+  name: Märkte zu Events bündeln
+  status: umgesetzt
+  beschreibung: 'Märkte, die zum selben Ereignis gehören (z. B. Kandidat 1, 2 und 3 derselben
+    Wahl), werden zu einem Event gebündelt.
+
+    Das Backend liefert Events mit ihren Outcome-Märkten.
+
+    Bestehende Märkte und Indizes bleiben unverändert funktionsfähig.
+
+
+    (Teil 1/2 von „Navigation nach Themen und Unterthemen; Märkte zu Events bündeln“, 1016-1549-navigation-nach-themen-und-unter)
+
+    Alle Teile in Reihenfolge:
+
+    1. Märkte zu Events bündeln ← dieses Ticket
+
+    2. Navigation nach Themen und Unterthemen
+
+    Setze NUR diesen Teil um und greife späteren Teilen nicht vor.'
+  kriterien:
+  - Märkte mit demselben Event werden automatisch einem Event zugeordnet.
+  - Ein Event enthält alle zugehörigen Outcome-Märkte.
+  - Bestehende Markt-Endpunkte liefern unveränderte Felder.
+  - Die Migration läuft auf einer frischen und auf einer bestehenden Datenbank.
+  tests:
+  - Drei Kandidaten-Märkte derselben Wahl ergeben genau ein Event mit drei Outcomes.
+  - Ein Markt ohne Event bleibt eigenständig.
+  - Migration läuft hoch und runter auf der Testdatenbank.
+  - Bestehender Markt-Endpunkt liefert dieselben Felder wie vorher.
+  testdateien:
+  - backend/tests/test_events.py
+  screenshot: .devconsole/features/1016-1549-markte-zu-events-bundeln.png
+  gruppe: grp-1016-1549-6ec5
+  rang: 1
+  teilVon: 1016-1549-navigation-nach-themen-und-unter
+- id: 1016-1549-navigation-nach-themen-und-unter
+  name: Navigation nach Themen und Unterthemen; Märkte zu Events bündeln
+  status: abgeloest
+  beschreibung: I need a way to navigate through the data like a tree structure that is organized
+    by topics and subtopics. Also, markets that refer to the same event but different outcomes.
+    For example, there is a market for candidate one, there is another market for candidate
+    two, there is another market for candidate three, but they all belong to the same election,
+    should be bundled into one market.
+  screenshot: .devconsole/features/1016-1549-navigation-nach-themen-und-unter.png
+  hinweis: 'Aufgeteilt in 2 Tickets (Gruppe grp-1016-1549-6ec5): 1016-1549-markte-zu-events-bundeln,
+    1016-1549-navigation-nach-themen-und-unter-2'
+- id: 1016-1410-datenkatalog-fur-prognosemarkte
+  name: Datenkatalog für Prognosemärkte und Aktienmarktdaten
+  status: umgesetzt
+  beschreibung: I need a data catalog here where I can see all the predictions markets that
+    are available, their history and their quality. Also, Stock Market data needs to be shown
+    here.
+  testdateien:
+  - backend/tests/test_data_catalog.py
+  screenshot: .devconsole/features/1016-1410-datenkatalog-fur-prognosemarkte.png
 - id: 1016-1007-median-liquiditat-als-anhaltpunk
   name: Median-Liquidität als Anhaltpunkt für Liqi-Filter
   status: umgesetzt

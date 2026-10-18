@@ -15,13 +15,16 @@
     </div>
     <div id="health" class="health"><span class="dot down"></span> Backend wird geprüft …</div>
   </header>
-
   <div id="banner" class="banner error hidden"></div>
-
   <nav class="tabs" aria-label="Ansichten">
     <button type="button" class="tab" data-view="indices">Index-Builder</button>
     <button type="button" class="tab" data-view="quality">Datenqualität</button>
     <button type="button" class="tab" data-view="metrics">Metriken</button>
+    <button type="button" class="tab" data-view="catalog">Datenkatalog</button>
+    <button type="button" class="tab" data-view="topics">Themen</button>
+    <button type="button" class="tab" data-view="agent">KI-Agent</button>
+    <button type="button" class="tab" data-view="domains">Domänen</button>
+    <button type="button" class="tab" data-view="directory">Marktverzeichnis</button><button type="button" class="tab" data-view="risk">Risiko-Themen</button><button type="button" class="tab" data-view="workshop">Risiko-Index-Werkstatt</button>
   </nav>
 
   <!-- ===== Index builder: value, history, constituents | rules on the right ===== -->
@@ -40,6 +43,8 @@
       <label class="field inline"><span>Mindest-Liquidität (USD, Ø 24h-Umsatz der letzten 30 Tage)</span><input id="mi-minliq" type="number" min="0" step="1000" value="0" list="liq-presets" title="Übliche Werte zur Auswahl oder eigener Betrag"></label>
       <p id="mi-liqmedian" class="hint"></p>
       <div id="mi-choices" class="mi-choices"></div>
+      <p id="mi-pending" class="hint hidden"></p>
+      <div class="row mi-weighting"><label class="field inline"><span>Gewichtungsverfahren</span><select id="mi-weighting"></select></label><button id="mi-propose" type="button" class="ghost" title="Die KI (Sonnet) schlägt Verfahren und Gewichte vor; sie wirken erst nach „Übernehmen“ und Speichern.">KI-Vorschlag</button></div><p id="mi-weights" class="hint"></p><div id="mi-proposal" class="mi-proposal hidden"><p><strong>KI-Vorschlag: <span id="mi-proposal-method"></span></strong> <span id="mi-proposal-model" class="hint"></span></p><p id="mi-proposal-weights"></p><p id="mi-proposal-rationale" class="hint"></p><div class="row"><button id="mi-proposal-accept" type="button">Übernehmen</button><button id="mi-proposal-reject" type="button" class="ghost">Verwerfen</button></div></div>
       <p id="new-index-error" class="error-text hidden"></p>
     </div>
     <p id="status">Lade Indizes …</p>
@@ -61,10 +66,10 @@
       </div>
       <div id="mi-chart"></div>
       <p id="mi-caption" class="hint"></p>
-      <div class="table-scroll"><table><thead><tr><th>Metrik</th><th>Einheit</th><th class="num">Gewicht</th><th>Status</th><th class="num">Letzter Wert</th><th class="num">z-Wert</th></tr></thead>
+      <div class="table-scroll"><table><thead><tr><th>Metrik</th><th>Einheit</th><th class="num" title="Anteil am Index am letzten Tag">Gewicht heute</th><th>Status</th><th class="num">Letzter Wert</th><th class="num">z-Wert</th></tr></thead>
         <tbody id="mi-components"></tbody></table></div>
     </section>
-    <div id="mi-cr-slot"></div>
+    <div id="mi-fc-slot"></div><div id="mi-cr-slot"></div><!-- forecast.js: forecast power report (risk index 6/7) -->
 
     <section id="result" class="hidden ib-grid">
       <div class="ib-main">
@@ -344,21 +349,139 @@
       <div class="controls"><button id="mn-create" type="button" disabled>Metrik anlegen</button></div>
       <p id="mn-status" class="hint" role="status" aria-live="polite"></p>
     </details><div id="metrics-list"></div></section>
+  <!-- ===== Data catalog: stored prediction markets and stock closes with history and quality ===== -->
+  <section data-view-panel="catalog" class="hidden">
+    <div class="card">
+      <div class="card-head">
+        <div><h2>Datenkatalog</h2>
+          <p class="hint">Alle gespeicherten Prognosemärkte und Aktienkurse mit Zeitraum, Verlauf und Qualitätsnote.
+            Note „gut“ = keine Auffälligkeit, „mittel“ = eine, „schwach“ = mehrere (kurze Historie, Lücken, fehlende Preise, Preissprünge, geringe Liquidität).</p></div>
+        <div class="controls"><span id="cat-time" class="muted"></span><button id="cat-refresh" type="button" class="ghost">Neu laden</button></div>
+      </div>
+      <div id="cat-kpis" class="kpis"></div>
+    </div>
+    <div class="card">
+      <h2>Prognosemärkte</h2>
+      <div class="row cat-filters">
+        <input id="cat-q" type="search" placeholder="Titel enthält …" maxlength="100" aria-label="Titel suchen">
+        <select id="cat-source" aria-label="Quelle"><option value="">Alle Quellen</option><option value="kalshi">Kalshi</option><option value="polymarket">Polymarket</option></select>
+        <select id="cat-min-days" aria-label="Mindestens Tage"><option value="1">ab 1 Tag</option><option value="7">ab 7 Tagen</option><option value="30">ab 30 Tagen</option><option value="90">ab 90 Tagen</option><option value="180">ab 180 Tagen</option></select>
+        <select id="cat-sort" aria-label="Sortierung"><option value="days">meiste Tage</option><option value="volume">höchstes Ø-Volumen</option><option value="last_date">zuletzt gesehen</option><option value="title">Titel A–Z</option></select>
+        <label class="field inline"><input id="cat-current" type="checkbox"> nur aktuelle</label>
+        <button id="cat-search" type="button">Anzeigen</button>
+      </div>
+      <p id="cat-status" class="hint" role="status" aria-live="polite"></p>
+      <div class="table-scroll cat-scroll"><table><thead><tr><th>Markt</th><th>Quelle</th><th>Zeitraum</th><th class="num">Tage</th>
+        <th class="num">Abdeckung</th><th class="num">Letzter Preis</th><th class="num">Ø 24h-Volumen (USD)</th><th>Qualität</th></tr></thead>
+        <tbody id="cat-rows"></tbody></table></div>
+      <div class="controls"><button id="cat-prev" type="button" class="ghost" disabled>Zurück</button><button id="cat-next" type="button" class="ghost" disabled>Weiter</button></div>
+    </div>
+    <div class="card">
+      <h2>Aktienmarktdaten</h2>
+      <div class="row"><input id="cat-stock-q" type="search" placeholder="Ticker oder Name …" maxlength="40" aria-label="Aktie suchen"></div>
+      <div class="table-scroll cat-scroll"><table><thead><tr><th>Ticker</th><th>Name</th><th>Zeitraum</th><th class="num">Kurstage</th>
+        <th class="num">Letzter Kurs</th><th class="num">1 Monat</th><th class="num">Gesamt</th><th>Qualität</th></tr></thead>
+        <tbody id="cat-stock-rows"></tbody></table></div>
+    </div>
+    <div id="cat-detail" class="card hidden">
+      <div class="card-head"><div><h2 id="cat-detail-title"></h2><p id="cat-detail-meta" class="hint"></p></div>
+        <button id="cat-detail-close" type="button" class="ghost">Schließen</button></div>
+      <div id="cat-chart"></div>
+      <div class="table-scroll qual-coverage"><table><thead id="cat-detail-head"></thead><tbody id="cat-detail-rows"></tbody></table></div>
+    </div>
+  </section>
+  <!-- ===== Topic tree: topic -> subtopic -> event (outcome markets) or market ===== -->
+  <section data-view-panel="topics" class="hidden">
+    <div class="card">
+      <div class="card-head">
+        <div><h2>Themen</h2>
+          <p class="hint">Märkte nach Thema und Unterthema (aus den Tags der Quellen). Ein Klick öffnet oder schließt eine Ebene
+            und zeigt rechts die Daten des Knotens. Events bündeln die Outcome-Märkte eines Ereignisses.</p></div>
+        <div class="controls"><span id="tp-time" class="muted"></span><button id="tp-refresh" type="button" class="ghost">Neu laden</button></div>
+      </div>
+      <p id="tp-status" class="hint" role="status" aria-live="polite"></p>
+    </div>
+    <div class="tp-grid">
+      <div class="card"><ul id="tp-tree" class="tree" aria-label="Themenbaum"></ul></div>
+      <div id="tp-detail" class="card hidden">
+        <h2 id="tp-detail-title"></h2><p id="tp-detail-meta" class="hint"></p>
+        <div class="table-scroll cat-scroll"><table><thead id="tp-detail-head"></thead><tbody id="tp-detail-rows"></tbody></table></div>
+      </div>
+    </div>
+  </section>
+  <!-- ===== Index agent: idea -> blueprint with chained markets and harmonization rules ===== -->
+  <section data-view-panel="agent" class="hidden">
+    <div class="ag-modes" role="tablist" aria-label="Modus des KI-Agenten"><button id="ag-mode-find" type="button" class="ag-mode" data-ag-mode="find" role="tab">Metriken finden</button><button id="ag-mode-create" type="button" class="ag-mode" data-ag-mode="create" role="tab">Metriken anlegen</button></div>
+    <!-- Mode "Metriken finden": existing catalog metrics for an idea (agent searches only the metric catalog) -->
+    <div id="af-panel">
+      <div class="card"><h2>Vorhandene Metriken finden</h2>
+        <p class="hint">Beschreibe deine Idee. Der Agent durchsucht nur den Metrik-Katalog (geprüfte Einzelmärkte und Ketten), nicht die Rohdaten. Gesperrte Metriken und Metriken mit zu kurzer Historie bleiben sichtbar und sind markiert.</p>
+        <label class="field"><span>Deine Idee</span><textarea id="af-input" maxlength="4000" rows="3" placeholder="z. B. Unsicherheit über die US-Geldpolitik"></textarea></label>
+        <div class="controls"><button id="af-send" type="button">Metriken suchen</button><span id="af-model" class="muted"></span></div><p id="af-status" class="hint" role="status" aria-live="polite"></p></div>
+      <div id="af-result" class="hidden">
+        <div class="card"><h2>Passende Metriken</h2><p id="af-reply" class="hint"></p>
+          <div class="table-scroll"><table><thead><tr><th>Metrik</th><th>Status</th><th class="num">Handelstage</th><th>Zeitraum</th><th>Prüfungen</th><th>Begründung</th><th>Hinweise</th><th></th></tr></thead><tbody id="af-rows"></tbody></table></div><p id="af-meta" class="hint"></p></div>
+        <div class="card"><h2>Nicht abgedeckt</h2><ul id="af-gaps" class="ag-list"></ul><div class="controls"><button id="af-handover" type="button">An „Metriken anlegen“ übergeben</button></div></div>
+      </div>
+    </div>
+    <!-- Mode "Metriken anlegen" lives in tab "Risiko-Themen" below the review list (1017-1107, 4/7): the mode button leads there -->
+  </section>
+  <!-- ===== Domains: topic/subtopic (+ search terms) with full raw history incl. expired markets ===== -->
+  <section data-view-panel="domains" class="hidden">
+    <div class="card">
+      <div class="card-head">
+        <div><h2 id="dm-form-title">Domäne anlegen</h2>
+          <p class="hint">Eine Domäne ist ein Thema (optional mit Unterthema und Suchbegriffen). Für alle ihre Märkte – auch abgelaufene
+            und aufgelöste – wird die vollständige Tageshistorie von Kalshi und Polymarket geladen; neue Märkte folgen beim täglichen Lauf.</p></div>
+      </div>
+      <div class="dm-form">
+        <label class="field"><span>Name</span><input id="dm-name" type="text" maxlength="120" placeholder="z. B. US-Geldpolitik"></label>
+        <label class="field"><span>Thema</span><select id="dm-topic"></select></label>
+        <label class="field"><span>Unterthema</span><select id="dm-subtopic"></select></label>
+        <label class="field"><span>Suchbegriffe (optional, durch Komma getrennt)</span><input id="dm-terms" type="text" maxlength="1000" placeholder="z. B. fed, rate cut"></label>
+      </div>
+      <div class="controls"><button id="dm-save" type="button">Domäne anlegen</button>
+        <button id="dm-cancel" type="button" class="ghost hidden">Abbrechen</button></div>
+      <p id="dm-status" class="hint" role="status" aria-live="polite"></p>
+    </div>
+    <div class="card">
+      <div class="card-head"><h2>Domänen</h2>
+        <div class="controls"><button id="dm-refresh" type="button" class="ghost">Neu laden</button></div></div>
+      <div class="table-scroll"><table><thead><tr><th>Name</th><th>Thema › Unterthema</th><th>Suchbegriffe</th>
+        <th class="num">Märkte aktiv</th><th class="num">abgelaufen</th><th>Historienbeginn</th><th>Letzter Tag</th>
+        <th class="num">Lücken (Tage)</th><th>Letzter Ladelauf</th><th></th></tr></thead><tbody id="dm-rows"></tbody></table></div>
+    </div>
+  </section>
+  <section data-view-panel="directory" id="md-panel" class="hidden"></section><section data-view-panel="workshop" id="ws-view" class="hidden"><div id="ws-panel"></div></section><!-- workshop.js (1017-1107, 7/7) --><!-- Market directory, rendered by directory.js --><section data-view-panel="risk" id="rk-view" class="hidden"><div id="rk-panel"></div><!-- risk.js; below: mode "Metriken anlegen" (1017-1107, 4/7), proposals only from accepted markets, then the blueprint chat -->
+    <div id="ag-create-panel"> <div class="card" id="mc-panel"> <h2>Metriken anlegen</h2> <p class="hint">Der Agent schlägt Einzelmärkte oder Ketten nur aus den Märkten vor, die oben in der Prüfliste des gewählten Themas angenommen sind – jeweils mit deren Lesart. Gerechnet wird nur mit Regeln aus dem festen Regelkatalog; alles andere erscheint als Hinweis und wird nicht automatisch umgesetzt.</p> <label class="field"><span>Idee oder nicht abgedeckte Aspekte</span><textarea id="mc-input" maxlength="4000" rows="3" placeholder="z. B. Wahrscheinlichkeit einer US-Rezession"></textarea></label> <div class="controls"><button id="mc-send" type="button">Metriken vorschlagen</button><span id="mc-model" class="muted"></span></div> <p id="mc-status" class="hint" role="status" aria-live="polite"></p> <div id="mc-result" class="hidden"><p id="mc-reply" class="hint"></p><div id="mc-proposals"></div><p id="mc-meta" class="hint"></p></div> </div>
+    <div class="card">
+      <div class="card-head">
+        <div><h2>KI-Agent für Index-Entwürfe</h2><p class="hint">Beschreibe deine Idee. Der Agent nutzt nur die angenommenen Märkte des Themas, verkettet aufeinanderfolgende Märkte derselben Frage zu einer langen Historie und sagt, wie die Daten harmonisiert werden. Ergebnis ist ein Startpunkt, den du im Gespräch verfeinerst.</p></div>
+        <div class="controls"><span id="ag-model" class="muted"></span><button id="ag-reset" type="button" class="ghost">Neu beginnen</button></div>
+      </div>
+      <div id="ag-chat" class="ag-chat" aria-live="polite"></div>
+      <label class="field"><span>Deine Idee / Rückfrage</span><textarea id="ag-input" maxlength="4000" rows="3" placeholder="z. B. Ein Index für das Risiko einer US-Rezession mit möglichst langer Historie"></textarea></label>
+      <div class="controls"><button id="ag-send" type="button">An den Agenten senden</button></div>
+      <p id="ag-status" class="hint" role="status" aria-live="polite"></p>
+    </div>
+    <div id="ag-result" class="hidden">
+      <div class="card">
+        <div class="card-head">
+          <div><h2 id="ag-name"></h2><p id="ag-thesis" class="hint"></p></div>
+          <div class="controls"><button id="ag-metric" type="button">Als Metrik-Entwurf anlegen</button></div>
+        </div>
+        <div id="ag-kpis" class="kpis"></div>
+        <div class="table-scroll"><table><thead><tr><th>Baustein</th><th>Art</th><th>Quellen</th><th>Historie</th><th class="num">Tage</th>
+          <th>Richtung</th><th class="num">Gewicht</th><th>Begründung</th></tr></thead><tbody id="ag-components"></tbody></table></div>
+        <p id="ag-metric-status" class="hint" role="status" aria-live="polite"></p>
+      </div>
+      <div class="card"><h2>Harmonisierung</h2><ul id="ag-rules" class="ag-list"></ul><h3>Hinweise</h3><ul id="ag-caveats" class="ag-list"></ul></div>
+      <div class="card"><h2>Gefundene Ketten</h2><p id="ag-chain-meta" class="hint"></p><div id="ag-chains"></div></div>
+    </div>
+    </div>
+  </section>
 </main>
 
-<script src="/static/shell.js"></script>
-<script src="/static/indices.js"></script>
-<script src="/static/fields.js"></script>
-<script src="/static/builder.js"></script>
-<script src="/static/correlation.js"></script>
-<script src="/static/trades.js"></script>
-<script src="/static/attribution.js"></script>
-<script src="/static/regression.js"></script>
-<script src="/static/quality.js"></script>
-<script src="/static/fedstaging.js"></script>
-<script src="/static/fedchains.js"></script>
-<script src="/static/metrics.js"></script>
-<script src="/static/metricnew.js"></script>
   <datalist id="liq-presets">
     <option value="0" label="alle (kein Filter)"></option>
     <option value="1000" label="1 Tsd. USD"></option>
@@ -368,6 +491,10 @@
     <option value="500000" label="500 Tsd. USD"></option>
     <option value="1000000" label="1 Mio. USD"></option>
   </datalist>
-<script src="/static/metricindex.js"></script>
+<script src="/static/shell.js"></script><script src="/static/indices.js"></script><script src="/static/fields.js"></script><script src="/static/builder.js"></script>
+<script src="/static/correlation.js"></script><script src="/static/trades.js"></script><script src="/static/attribution.js"></script><script src="/static/regression.js"></script>
+<script src="/static/quality.js"></script><script src="/static/fedstaging.js"></script><script src="/static/fedchains.js"></script><script src="/static/metrics.js"></script>
+<script src="/static/metricnew.js"></script><script src="/static/metricindex.js"></script><script src="/static/forecast.js"></script><script src="/static/miweights.js"></script><script src="/static/catalog.js"></script><script src="/static/topics.js"></script>
+<script src="/static/agent.js"></script><script src="/static/creator.js"></script><script src="/static/finder.js"></script><script src="/static/domains.js"></script><script src="/static/directory.js"></script><script src="/static/risk.js"></script><script src="/static/workshop.js"></script>
 </body>
 </html>

@@ -18,14 +18,13 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 
-import requests
-
 from backend.app.clients.kalshi import KalshiClient
 from backend.app.clients.polymarket import PolymarketClient
 from backend.app.eui.harmonize import harmonize
 from backend.app.logging_setup import configure_logging
 from backend.app.models import utcnow
 from backend.app.probe import CONFIG_PATH, RUNS_DIR
+from backend.app.rawdata import http
 
 logger = logging.getLogger(__name__)
 
@@ -76,7 +75,7 @@ def fetch_batch(session, url: str, params, timeout: float = TIMEOUT) -> FetchRes
                 result.items = items
             else:
                 result.error = "unexpected_payload"
-    except requests.RequestException as exc:
+    except http.RequestException as exc:
         result.error = f"request_error: {exc}"[:200]
     except ValueError as exc:
         result.error = f"invalid_json: {exc}"[:200]
@@ -158,7 +157,7 @@ def write_record(record: dict, out_dir: Path = RUNS_DIR) -> Path:
 
 
 def collect_once(config_path: Path = CONFIG_PATH, out_dir: Path = RUNS_DIR, session=None) -> tuple[dict, Path]:
-    record = collect(session or requests.Session(), load_config(config_path))
+    record = collect(session or http.new_session(), load_config(config_path))
     path = write_record(record, out_dir)
     logger.info("probe run %s: status=%s file=%s", record.get("run_id") or "local", record["status"], path)
     return record, path

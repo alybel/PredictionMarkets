@@ -7,6 +7,8 @@ volume is the day's turnover where the source publishes it (Kalshi), else the cu
 one (Polymarket). Rows are marked ``exclusion_reason = "backfill"`` and never eligible,
 so the Economic Uncertainty Index ignores them. Existing rows are never touched and
 today is left to the daily run. Only markets of the latest real snapshot can be backfilled.
+Without an injected fetcher the histories come from the raw data layer: one refresh request for all markets
+(raw job "history"), then each market is read from that job's raw answers (``rawdata.providers.RawHistory``).
 
 CLI: ``python -m backend.app.backfill.service`` [--index NAME] [--days 365] [--limit 50]
 """
@@ -19,13 +21,14 @@ from datetime import date, datetime, time, timedelta, timezone
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from backend.app.backfill.sources import DayPoint, fetch_history
+from backend.app.backfill.sources import DayPoint
 from backend.app.engine import apply_funnel, list_rules
 from backend.app.eui.models import MarketSnapshot, SnapshotRun
 from backend.app.history import _as_market
 from backend.app.logging_setup import configure_logging
 from backend.app.models import IndexRule, utcnow
 from backend.app.quality.pit import BACKFILL
+from backend.app.rawdata.providers import RawHistory
 
 logger = logging.getLogger(__name__)
 
@@ -34,6 +37,15 @@ BACKFILL_DAYS = 365  # default reach of a backfill run (the history window itsel
 MAX_LIMIT = 200
 
 HistoryFetcher = Callable[[str, str, date], dict[date, DayPoint]]
+
+
+def history_fetcher(session: Session, fetcher: HistoryFetcher | None, keys, start: date, trigger: str = "manual") -> HistoryFetcher:
+    """The injected fetcher, else the raw layer's one, already asked for all ``keys`` (source, external id)."""
+    if fetcher is None:
+        fetcher = RawHistory.for_session(session, trigger)
+    if isinstance(fetcher, RawHistory):
+        fetcher.prepare(list(keys), start)
+    return fetcher
 
 
 def latest_live_date(session: Session) -> date | None:
@@ -63,11 +75,12 @@ def _row(template: MarketSnapshot, run_id: int, day: date, point: DayPoint, now:
 
 
 def backfill_markets(session: Session, templates: list[MarketSnapshot], days: int = BACKFILL_DAYS,
-                     fetcher: HistoryFetcher = fetch_history, today: date | None = None) -> dict:
+                     fetcher: HistoryFetcher | None = None, today: date | None = None) -> dict:
     """Add the missing past days of the given markets; one failing market never stops the run."""
     now = utcnow()
     today = today or now.date()
     start = today - timedelta(days=days)
+    fetcher = history_fetcher(session, fetcher, ((t.source, t.external_id) for t in templates), start, "backfill")
     summary = {"markets": len(templates), "markets_with_history": 0, "rows_added": 0, "days_added": 0}
     run: SnapshotRun | None = None
     new_days: set[date] = set()
@@ -102,7 +115,7 @@ def backfill_markets(session: Session, templates: list[MarketSnapshot], days: in
 
 
 def backfill_index(session: Session, rule: IndexRule, days: int = BACKFILL_DAYS, limit: int = DEFAULT_LIMIT,
-                   fetcher: HistoryFetcher = fetch_history, today: date | None = None) -> dict:
+                   fetcher: HistoryFetcher | None = None, today: date | None = None) -> dict:
     templates = index_markets(session, rule, limit)
     logger.info("backfill of %r: %d markets over %d days", rule.index_name, len(templates), days)
     return {"index_name": rule.index_name, "days": days, **backfill_markets(session, templates, days, fetcher, today),

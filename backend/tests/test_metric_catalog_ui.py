@@ -37,7 +37,8 @@ vm.runInNewContext(fs.readFileSync(file, "utf8"), ctx);
   const card = ctx.metricCard(JSON.parse(metric));
   const buttons = Object.fromEntries(walk(card).filter((n) => n.dataset.action).map((b) => [b.dataset.action, b]));
   if (action) await buttons[action].handlers.click();
-  console.log(JSON.stringify({ approveDisabled: buttons.approve.disabled, blockDisabled: buttons.block.disabled, calls, events }));
+  console.log(JSON.stringify({ approveDisabled: buttons.approve.disabled, blockDisabled: buttons.block.disabled, calls, events,
+    texts: walk(card).map((n) => n.textContent).filter(Boolean) }));
 })();
 """
 

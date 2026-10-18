@@ -5,16 +5,20 @@
   (no look-ahead) — so bp and probabilities become unit-free and comparable. The first ``MIN_HISTORY`` days
   of a metric have no z-score yet.
 * Index value of a day = weighted mean of the components' z-scores; only days on which every component has one.
+  Weighting method per index (``builder.weighting``): ``manual`` keeps the stored weights (unchanged path), the
+  others compute point-in-time weights per day from data up to that day.
 * A component blocked after saving keeps being computed; the index then carries a warning (logged).
 """
 
 import logging
 from dataclasses import dataclass
+from datetime import date
 from statistics import fmean, pstdev
 
 from sqlalchemy.orm import Session
 
 from backend.app.builder.models import MetricIndex
+from backend.app.builder.weighting import MANUAL, METHODS, Weighting, percent, weighted_series
 from backend.app.metrics.catalog import MetricPoint
 from backend.app.metrics.models import DRAFT, VALIDATED, MetricState
 from backend.app.metrics.service import Evaluation, MetricNotFound, definition
@@ -26,6 +30,16 @@ MIN_HISTORY = 5
 
 class InvalidComponents(ValueError):
     pass
+
+
+class InvalidWeighting(ValueError):
+    pass
+
+
+def validate_weighting(method: str) -> str:
+    if method not in METHODS:
+        raise InvalidWeighting(f"Unbekanntes Gewichtungsverfahren: {method}")
+    return method
 
 
 class NotValidated(Exception):
@@ -113,11 +127,20 @@ def index_payload(session: Session, row: MetricIndex, evaluations: dict[str, Eva
                            "last_value": round(last.value, 4) if last else None,
                            "last_date": last.day.isoformat() if last else None, "days": len(ev.points),
                            "liquidity_usd": round(ev.liquidity, 2) if ev.liquidity is not None else None})
-    points = index_series(z_by_key, weights)[-days:]
+    method = row.weighting or MANUAL
+    weighting = Weighting(method, {k: evaluations[k].points for k in z_by_key}, z_by_key, weights)
+    series = index_series(z_by_key, weights) if method == MANUAL else weighted_series(z_by_key, weighting.at)
+    points = series[-days:]
+    if weighting.fallback_days:
+        logger.warning("metric index %r: method %s fell back to equal weights on %d days (missing data)", row.name, method,
+                       weighting.fallback_days)
+    current = percent(weighting.at(date.fromisoformat(series[-1]["date"]) if series else date.max))
+    for comp in components:
+        comp["weight_pct"] = current.get(comp["key"])
     if warnings:
         logger.warning("metric index %r computed with warnings: %s", row.name, " | ".join(warnings))
-    logger.info("metric index %r: %d components, %d days, last %s", row.name, len(components), len(points),
-                points[-1]["value"] if points else None)
-    return {"name": row.name, "components": components, "warning": bool(warnings), "warnings": warnings,
-            "points": points, "summary": _summary(points), "min_history": MIN_HISTORY,
+    logger.info("metric index %r: %d components, method %s, current weights %s, %d days, last %s", row.name, len(components),
+                method, current, len(points), points[-1]["value"] if points else None)
+    return {"name": row.name, "weighting": method, "weighting_label": METHODS[method], "components": components,
+            "warning": bool(warnings), "warnings": warnings, "points": points, "summary": _summary(points), "min_history": MIN_HISTORY,
             "updated_at": row.updated_at.isoformat() if row.updated_at else None}

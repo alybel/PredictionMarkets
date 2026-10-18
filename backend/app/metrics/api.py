@@ -17,6 +17,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from backend.app.deps import get_session
+from backend.app.metrics.chain_rules import READINGS, metric_reading, reading
 from backend.app.metrics.liquidity import median_liquidity, passes
 from backend.app.metrics.models import MetricState
 from backend.app.metrics.service import (ChecksNotGreen, Evaluation, MetricNotFound, apply, approve, block, create_custom,
@@ -53,8 +54,24 @@ def _payload(ev: Evaluation, state: MetricState) -> dict:
             "status": state.status, "status_reason": state.status_reason, "validated_at": _iso(state.validated_at),
             "blocked_at": _iso(state.blocked_at), "checked_at": _iso(state.checked_at), "checks": state.checks,
             "all_green": green, "can_approve": green and state.status != "validated", "liquidity_usd": _usd(ev.liquidity),
-            "series": [{"date": p.day.isoformat(), "value": round(p.value, 3), "roll": p.roll, "liquidity": _usd(p.liquidity)}
-                       for p in ev.points]}
+            "series": [_point(p) for p in ev.points], **_structure(d)}
+
+
+def _point(p) -> dict:
+    out = {"date": p.day.isoformat(), "value": round(p.value, 3), "roll": p.roll, "liquidity": _usd(p.liquidity)}
+    return out | {"level": round(p.level, 4)} if p.level is not None else out
+
+
+def _structure(d) -> dict:
+    """Chain / single-market metrics: their stored links, executed rules and notes (never executed)."""
+    if not d.is_chain:
+        return {}
+    keys = metric_reading(d.links)
+    return {"kind": "chain" if len(d.links) > 1 else "single", "rules": list(d.rules), "notes": list(d.notes), "reading": keys,
+            "reading_label": ", ".join(READINGS[k]["label"] for k in keys.split(", ")),
+            "links": [{"source": l.source, "external_id": l.external_id, "title": l.title, "direction": l.direction,
+                       "reading_label": READINGS[reading(l.direction)]["label"],
+                       "roll_on": l.roll_on.isoformat() if l.roll_on else None} for l in d.links]}
 
 
 def _usd(v: float | None) -> float | None:

@@ -48,7 +48,7 @@ class PolymarketClient(BaseClient):
             if (parse_float(event.get("volume24hr")) or 0.0) < floor:
                 return False
             tags = clean_tags(event.get("tags"))
-            parent = [{"slug": event.get("slug")}]
+            parent = [{"id": event.get("id"), "slug": event.get("slug"), "title": event.get("title")}]
             for market in event.get("markets") or []:
                 if isinstance(market, dict):
                     items.append({**market, "tags": tags, "events": parent})
@@ -81,7 +81,17 @@ class PolymarketClient(BaseClient):
             best_ask=parse_float(item.get("bestAsk")),
             active=self._active(item),
             description=clean_text(item.get("description")),
+            **self._event(item),
         )
+
+    @staticmethod
+    def _event(item: dict) -> dict:
+        """Parent event (id, else slug) plus the outcome label (``groupItemTitle``) of the market."""
+        events = item.get("events")
+        event = events[0] if isinstance(events, list) and events and isinstance(events[0], dict) else {}
+        key = event.get("id") or event.get("slug")
+        return {"event_key": str(key) if key else None, "event_title": clean_text(event.get("title"), 512),
+                "outcome_label": clean_text(item.get("groupItemTitle"), 256)}
 
     @staticmethod
     def _active(item: dict) -> bool | None:

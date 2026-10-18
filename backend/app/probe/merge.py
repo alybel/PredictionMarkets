@@ -18,10 +18,9 @@ import zipfile
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-import requests
-
 from backend.app.logging_setup import configure_logging
 from backend.app.probe import ARTIFACT_PREFIX, DATA_DIR
+from backend.app.rawdata import http
 
 logger = logging.getLogger(__name__)
 
@@ -164,7 +163,7 @@ def github_records(session, repo: str, token: str, since: datetime, known: set[s
     for artifact in pending:
         try:
             records.extend(download_records(session, artifact, token))
-        except (requests.RequestException, zipfile.BadZipFile, ValueError) as exc:
+        except (http.RequestException, zipfile.BadZipFile, ValueError) as exc:
             logger.warning("artifact %s could not be read: %s", artifact.get("name"), exc)
     return records
 
@@ -185,7 +184,7 @@ def main(argv=None) -> int:
             logger.error("GITHUB_REPOSITORY and GITHUB_TOKEN are required without --local")
             return 2
         since = datetime.now(timezone.utc) - timedelta(hours=args.since_hours)
-        records = github_records(requests.Session(), repo, token, since, known)
+        records = github_records(http.new_session(), repo, token, since, known)
     added = append_records(args.data_dir, records, known)
     logger.info("merge finished: %s", added or "nothing new")
     print(json.dumps(added))

@@ -10,12 +10,11 @@ import time
 from collections.abc import Callable
 from datetime import datetime
 
-import requests
-
 from backend.app.clients.base import parse_float
 from backend.app.fed.parsers import (FedMarketInfo, FedPoint, KALSHI, POLYMARKET, is_fed_decision_event,
                                      parse_kalshi_candles, parse_kalshi_event, parse_polymarket_event,
                                      parse_polymarket_history, start_ts)
+from backend.app.rawdata import http
 
 logger = logging.getLogger(__name__)
 
@@ -36,10 +35,10 @@ RETRIES = 4
 BACKOFF_S = 2.0
 
 
-def _request(url: str, params: dict | None, sleep: Callable[[float], None]) -> requests.Response:
+def _request(url: str, params: dict | None, sleep: Callable[[float], None]) -> object:
     """GET; on HTTP 429 (rate limit) waits ``Retry-After`` or an increasing backoff and retries."""
     for attempt in range(RETRIES + 1):
-        response = requests.get(url, params=params, timeout=TIMEOUT_S)
+        response = http.get(url, params, timeout=TIMEOUT_S)
         if response.status_code != 429 or attempt == RETRIES:
             break
         wait = parse_float(response.headers.get("Retry-After")) or BACKOFF_S * 2 ** attempt
@@ -81,7 +80,7 @@ class HttpFedSource:
                 if not markets:  # settled before the historical cutoff
                     markets = (self.get(f"{KALSHI_API}/historical/markets", {"event_ticker": ticker, "limit": 50}) or {}).get("markets") or []
                 out.extend(parse_kalshi_event(event, markets))
-            except (requests.RequestException, ValueError, TypeError, AttributeError) as exc:
+            except (http.RequestException, ValueError, TypeError, AttributeError) as exc:
                 logger.warning("fed listing of kalshi event %s failed: %s", ticker, exc)
         logger.info("fed listing kalshi: %d events, %d outcome markets", len(events), len(out))
         return out
@@ -109,11 +108,11 @@ class HttpFedSource:
         kalshi: list[FedMarketInfo] = []
         try:
             kalshi = self.kalshi_markets()
-        except (requests.RequestException, ValueError, TypeError, AttributeError) as exc:
+        except (http.RequestException, ValueError, TypeError, AttributeError) as exc:
             logger.error("fed listing kalshi failed: %s", exc)
         try:
             poly = self.polymarket_markets(sorted({m.session_date for m in kalshi}))
-        except (requests.RequestException, ValueError, TypeError, AttributeError) as exc:
+        except (http.RequestException, ValueError, TypeError, AttributeError) as exc:
             logger.error("fed listing polymarket failed: %s", exc)
             poly = []
         return kalshi + poly
@@ -126,7 +125,7 @@ class HttpFedSource:
             points: list[FedPoint] = []
             try:
                 points = parse_kalshi_candles(self.get(f"{KALSHI_API}/series/{KALSHI_SERIES}/markets/{info.history_key}/candlesticks", params), now)
-            except requests.HTTPError:
+            except http.HTTPError:
                 points = []
             return points or parse_kalshi_candles(self.get(f"{KALSHI_API}/historical/markets/{info.history_key}/candlesticks", params), now)
         if info.source == POLYMARKET:

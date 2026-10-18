@@ -70,7 +70,7 @@ function metricCard(m) {
   h2.appendChild(badge);
   const last = m.series.length ? m.series[m.series.length - 1] : null;
   const facts = [
-    "Einheit: " + m.unit, "Quelle: " + m.source,
+    "Einheit: " + m.unit, "Quelle: " + m.source, m.reading_label ? "Lesart: " + m.reading_label : null,
     "Freigabe: " + (m.validated_at && m.status === "validated" ? metricStamp(m.validated_at) : "–"),
     m.status === "blocked" ? "Gesperrt seit: " + metricStamp(m.blocked_at) : null,
     "Geprüft: " + metricStamp(m.checked_at),

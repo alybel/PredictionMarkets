@@ -77,6 +77,7 @@ async function loadIndex(name, btn, refresh = false) {
   setStatus("Rufe „" + name + "“ ab …", false);
   $("result").classList.add("hidden");
   $("mi-result").classList.add("hidden");
+  $("mi-fc-slot").classList.add("hidden"); // forecast report (forecast.js) belongs to metric indices only
   try {
     const res = await fetch("/indices/" + encodeURIComponent(name) + (refresh ? "?refresh=1" : ""));
     if (!res.ok) throw new Error("HTTP " + res.status);
@@ -271,6 +272,7 @@ async function deleteIndex(name, archived) {
   parkCorrelation(); // the stock card of a deleted metric index goes back into the hidden archive view
   $("result").classList.add("hidden");
   $("mi-result").classList.add("hidden");
+  $("mi-fc-slot").classList.add("hidden"); // forecast report (forecast.js) belongs to metric indices only
   await loadIndices();
   setStatus("Index „" + name + "“ gelöscht.", false);
 }

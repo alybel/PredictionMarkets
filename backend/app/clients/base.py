@@ -1,17 +1,18 @@
-"""Shared schema and HTTP plumbing for market data clients."""
+"""Shared schema and request plumbing for market data clients (no HTTP of their own: answers come from a getter)."""
 
 import logging
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime
-
-import requests
 
 from backend.app.models import MIN_LIQUIDITY_USD, utcnow
 
 logger = logging.getLogger(__name__)
 
 DEFAULT_TIMEOUT = 10.0
+
+GetJson = Callable[[str, dict], object]
 
 
 @dataclass(frozen=True)
@@ -32,6 +33,11 @@ class NormalizedMarket:
     ``volume_24h`` (see ``backend.app.field_docs``). ``depth`` keeps the
     source's standing-money figure (Polymarket order-book depth, Kalshi
     reported liquidity or open interest) for the uncertainty liquidity score.
+    ``event_key``/``event_title`` name the source event the market belongs
+    to (several outcome markets of one election share it) and
+    ``outcome_label`` the market's outcome within it; None when the source
+    reports no event (see ``backend.app.events``). They are internal: the
+    index endpoints strip them (``EVENT_FIELDS``) to keep their fields stable.
     """
 
     source: str
@@ -52,6 +58,12 @@ class NormalizedMarket:
     description: str | None = None
     liquidity_basis: str | None = None
     depth: float | None = None
+    event_key: str | None = None
+    event_title: str | None = None
+    outcome_label: str | None = None
+
+
+EVENT_FIELDS = ("event_key", "event_title", "outcome_label")
 
 
 LIQUIDITY_BASIS_VOLUME_24H = "volume_24h"
@@ -102,7 +114,12 @@ def clean_tags(values) -> list[str]:
 
 
 class BaseClient:
-    """Fetches JSON from an API and never lets one bad response crash the caller.
+    """Pages through a source's answers and never lets one bad response crash the caller.
+
+    Answers come from ``get_json(url, params) -> JSON | None``: inside a raw job the raw layer's recorder
+    (API -> staging -> ``raw_responses``), in the processes the reader of ``raw_responses``
+    (``backend.app.rawdata.providers.RawMarkets``); the client itself never opens a connection. An injected
+    HTTP-like ``session`` (tests, tools) is wrapped by ``rawdata.access.session_getter``.
 
     Subclasses page through their source in ``_fetch_raw`` and normalize
     single entries in ``_normalize``. ``fetch_markets`` applies the
@@ -117,27 +134,27 @@ class BaseClient:
 
     def __init__(
         self,
-        session: requests.Session | None = None,
+        session=None,
         timeout: float = DEFAULT_TIMEOUT,
         liquidity_floor: float | None = MIN_LIQUIDITY_USD,
         request_delay: float = 0.0,
+        get_json: GetJson | None = None,
     ):
-        self._session = session or requests.Session()
-        self._timeout = timeout
+        if get_json is None and session is not None:
+            from backend.app.rawdata.access import session_getter
+
+            get_json = session_getter(session, timeout, self.source)
+        self._get = get_json
         self.liquidity_floor = liquidity_floor
         self.request_delay = request_delay
 
     def _get_json(self, url: str, params: dict | None = None) -> dict | list | None:
-        """GET a URL and return parsed JSON, or None on any error."""
+        """Parsed answer of one request, None when it failed (``MissingRawData`` when nothing is stored at all)."""
+        if self._get is None:
+            raise RuntimeError(f"{self.source}: no data access - markets come from the raw data layer (rawdata.providers)")
         if self.request_delay > 0:
             time.sleep(self.request_delay)
-        try:
-            response = self._session.get(url, params=params, timeout=self._timeout)
-            response.raise_for_status()
-            return response.json()
-        except (requests.RequestException, ValueError) as exc:
-            logger.warning("%s: request to %s failed: %s", self.source, url, exc)
-            return None
+        return self._get(url, params or {})
 
     def fetch_markets(self) -> list[NormalizedMarket]:
         """Normalized markets at or above the liquidity floor; empty if the API is unavailable."""

@@ -6,7 +6,8 @@
 * coverage     – share of missing calendar days between first and last day stays at or below the threshold.
 * roll_jumps   – on a roll day the metric moves only by the within-meeting change (linked series only).
 * plausibility – Kalshi and Polymarket expect the chain's meeting within the threshold on almost every day.
-Market-basket metrics (Index Manufacture) run lookahead (point-in-time snapshot rows) and coverage only.
+Market-basket metrics (Index Manufacture) run lookahead (point-in-time snapshot rows) and coverage only;
+chain / single-market metrics (agent step 2) additionally run roll_jumps.
 """
 
 from datetime import date
@@ -101,3 +102,7 @@ def check_snapshot_lookahead(violations: list[dict]) -> dict:
 
 def run_basket_checks(points: list[MetricPoint], violations: list[dict]) -> list[dict]:
     return [check_snapshot_lookahead(violations), check_coverage(points)]
+
+
+def run_chain_checks(points: list[MetricPoint], violations: list[dict]) -> list[dict]:
+    return run_basket_checks(points, violations) + [check_roll_jumps(points)]

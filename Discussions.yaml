@@ -1,4 +1,189 @@
 # Discussions.yaml — benannte Claude-Diskussionen (verwaltet von DevConsole)
+- id: disc-1017-1416-bestehende-datenbank-daten-wiede
+  name: Bestehende Datenbank-Daten wiederverwenden
+  thema: 'is it taking the data from the database that already exists? '
+  model: Standard
+  thinking: standard
+  erstellt: 2026-10-17 14:16
+  bild: .devconsole/discussions/F0BB3968-3A35-438D-B981-B7AA83418E02.png
+  archiviert: 2026-10-17 14:26
+  ergebnis: 'Ins Ticket übernommen: Architektur-Test: externe API-Aufrufe nur in der Rohdatenschicht
+    (1017-1426-architektur-test-externe-api-auf)
+
+    Ein automatischer Test sichert die Layered Architecture ab: Außerhalb der Rohdatenschicht
+    darf kein Code externe APIs aufrufen (z. B. requests, httpx, urllib).
+
+    Der Test läuft in CI auf einem frischen Clone ohne lokale Dateien.
+
+    Definition of Done:
+
+    - Der Architektur-Test ist Teil der Test-Suite und grün.
+
+    - Ein absichtlich eingefügter HTTP-Aufruf in einem Businessprozess lässt den Test fehlschlagen.
+
+    - Der Test braucht weder Netzwerk noch lokale Konfiguration.
+
+    Testumfang:
+
+    - Scan aller Module außerhalb der Rohdatenschicht findet keine HTTP-Bibliotheken.
+
+    - Negativfall: ein Testmodul mit HTTP-Import außerhalb der Rohdatenschicht wird als Verstoß
+    erkannt.'
+- id: disc-1017-1021-gap-analyse-marktbasierter-risik
+  name: 'Gap-Analyse: Marktbasierter Risiko-Index (Pipeline 1–5)'
+  thema: "1\\) raw data is pulled into the staging area, from polymarket and from kalshi,
+    only what's available today. New markets are earmarked and shown separately. also we need
+    to know which markets were available historically.\n\n<br />\n\n2) on these raw data,
+    we now need to build submarkets around topics. Take market crash risk as a topic. During
+    time, there have been markets that can tell us somethin on market risk. So, I need to
+    see a timeline (at least 3 years) and the markets during that time where the AI thinks
+    they have something to do with market risk (use Haiku for this classification). Example
+    would be: SP500 risk of declining more than 10% in the next 30 days. Or volatility in
+    the probability of a change of Fed Interest Rate decision. There is a good amount of complexity
+    to it.  \n\nThere is a human in the loop selection process of these markets (accept /
+    reject). Also the way in which the market tells us something about risk need to be defined
+    (is 1 = high-risk, is 0.5 = high risk because it means uncertainty, is the volatility
+    of the market high risk because it reflects political unrest and uncertainty - AI needs
+    to make a suggestion here as well)\n\n<br />\n\n3\\) Based on 2) the detected markets
+    need to be grouped together into chained markets. These chained markets are the metrics
+    on which the index is ultimately comprised of\n\n<br />\n\n4\\) The metrics are weighted
+    into an index.\n\n<br />\n\n5\\) The index is correlated to Stock Market, Bond Market
+    and Volatility Market automatically and a \"forecasting\" power is calculated.\n\n\n\n\nThis
+    is what we need to to. Make a gap analysis to the app and suggest steps to close these
+    gaps. I want a need process guidance and ai supported of course in the app"
+  model: Standard
+  thinking: standard
+  erstellt: 2026-10-17 10:21
+  archiviert: 2026-10-17 11:07
+  ergebnis: 'Ins Ticket übernommen: Risiko-Index 7/7 – Assistent „Risiko-Index-Werkstatt“
+    (geführter Ablauf Schritt 1–5) (1017-1107-risiko-index-7-7-assistent-risik)
+
+    - Neuer Tab „Risiko-Index-Werkstatt“, der durch die fünf Schritte führt: Rohdaten → Themen-Einordnung/Prüfliste
+    → Ketten-Metriken → Gewichtung → Prognosekraft.
+
+    - Je Schritt sichtbar: Status (offen/in Arbeit/erledigt), offene Aufgaben (z. B. ungeprüfte
+    Märkte, neue Märkte im Eingangskorb), KI-Vorschlag und Freigabe durch den Menschen.
+
+    - Nutzt ausschließlich die Funktionen aus Ticket 1–6; bestehende Tabs bleiben erreichbar.
+
+    - Pilot-Thema „Marktcrash-Risiko“ ist vorbelegt; weitere Themen lassen sich anlegen.
+
+    - Logging: Schrittwechsel, Klicks, Freigaben.
+
+    Definition of Done:
+
+    - Für „Marktcrash-Risiko“ lässt sich der ganze Weg in der Werkstatt durchklicken bis zum
+    Prognosekraft-Bericht.
+
+    - Jeder Schritt zeigt Status und offene Aufgaben korrekt an.
+
+    - Kein KI-Vorschlag wird ohne Bestätigung durch den Menschen wirksam.
+
+    - Bestehende Tabs funktionieren unverändert.
+
+    - Alle Klicks und Schrittwechsel stehen im app.log; Changelog.md und Requirements.log
+    sind ergänzt.
+
+    Testumfang:
+
+    - Status-Endpunkt: Thema ohne geprüfte Märkte → Schritt 2 offen; nach Annahme → erledigt.
+
+    - Offene Aufgaben zählen ungeprüfte und neue Märkte korrekt.
+
+    - Ende-zu-Ende mit gefakten KI-Antworten und gemockten Quellen: Thema → Index → Bericht.
+
+    - Statische JS-Prüfung (test_static_js) läuft durch.
+
+    - Keine echten LLM- und Netzwerkaufrufe.'
+- id: disc-1016-1957-agent-umsetzung-innerhalb-der-pl
+  name: Agent-Umsetzung innerhalb der Plattform klären
+  thema: wie setzt der KI Agent das um innerhalb der Plattform?
+  model: Standard
+  thinking: standard
+  erstellt: 2026-10-16 19:57
+  bild: .devconsole/discussions/0B788BAF-A795-44AF-9E3C-DF9E3C572074.png
+  archiviert: 2026-10-16 20:13
+  ergebnis: 'Ins Ticket übernommen: KI-Agent Schritt 2 – fehlende Metriken anlegen (ausführbare
+    Ketten-Regeln) (1016-2013-ki-agent-schritt-2-fehlende-metr)
+
+    Der KI-Agent hilft im zweiten, getrennten Schritt, fehlende Metriken aus den Domänen-Rohdaten
+    anzulegen.
+
+    - Eingang: nicht abgedeckte Aspekte aus Schritt 1 oder direkte Idee.
+
+    - Der Agent sucht nur in Domänen-Rohdaten (volle Historie) und schlägt Metriken vor: Einzelmarkt
+    oder Kette, mit Regeln ausschließlich aus einem festen, ausführbaren Regelkatalog (Richtung
+    steigend/fallend = 1 − p, Roll am Enddatum, Front-Kette bei parallelen Gliedern / konstante
+    Restlaufzeit, Lücken nicht auffüllen, Ablauf ohne Vorwärtsauffüllen).
+
+    - Freitext-Regeln des Modells werden nicht ausgeführt, sondern sichtbar als „Hinweis,
+    nicht automatisch umgesetzt“ angezeigt.
+
+    - Vor dem Vorschlag prüft der Agent Historie (≥ 180 Handelstage, Lücken) und Liquidität;
+    Ergebnis steht am Vorschlag.
+
+    - Liegt die Idee in keiner Domäne, sagt der Agent das und schlägt eine neue Domäne vor
+    statt mit dünnen Daten weiterzuarbeiten.
+
+    - „Als Metrik-Entwurf übernehmen“ speichert die Metrik STRUKTURIERT (Glieder mit Roll-Tag,
+    Richtung, Regeln) statt nur als Text; Status startet als draft, bestehende Prüfungen laufen,
+    Freigabe bleibt manuell.
+
+    - Neue Rechenart für Ketten-Metriken, die die Regeln wirklich ausführt: je Tag nur das
+    aktive Glied, Tagesänderung nur innerhalb eines Glieds (kein Sprung am Roll-Tag), Richtung
+    gedreht, Lücken offen. Wiederverwendung der Ketten-Logik der Fed-Zinsketten. Ausgabe als
+    Wahrscheinlichkeitsniveau des aktiven Glieds plus verkettete Reihe.
+
+    - Modell: Sonnet. Jede Referenz wird gegen die Rohdaten validiert.
+
+    - Bestehende Markt-Korb-Metriken (#45) bleiben unverändert erhalten und rechnen wie bisher
+    (keine Funktion wird entfernt). Hinweis Requirements.log: berührt #45 und #53 – vor Umsetzung
+    klären.
+
+    - Logging: Vorschläge, verworfene Referenzen, Übernahme-Klicks, Rechenläufe je Ketten-Metrik.
+
+    Definition of Done:
+
+    - Im Modus „Metriken anlegen“ schlägt der Agent Einzelmärkte und Ketten aus Domänen-Rohdaten
+    mit Regeln aus dem festen Katalog vor.
+
+    - Jeder Vorschlag zeigt Historienlänge, Lücken und Liquidität; unter 180 Handelstagen
+    mit Warnhinweis.
+
+    - Freitext-Regeln erscheinen als „Hinweis, nicht automatisch umgesetzt“ und beeinflussen
+    die Rechnung nicht.
+
+    - Ohne passende Domäne meldet der Agent das und schlägt eine Domäne vor.
+
+    - Übernommene Ketten-Metriken werden strukturiert gespeichert, starten als draft und durchlaufen
+    die Prüfungen.
+
+    - Die Ketten-Rechnung zeigt am Roll-Tag keinen Sprung, fallende Glieder gehen als 1 −
+    p ein, Lücken bleiben leer.
+
+    - Bestehende Korb-Metriken liefern unveränderte Werte.
+
+    - Vorschläge und Übernahmen stehen im app.log; Changelog.md und Requirements.log sind
+    ergänzt.
+
+    Testumfang:
+
+    - Ketten-Rechnung: zwei Glieder mit Roll-Tag → verkettete Reihe ohne Sprung am Roll-Tag.
+
+    - Parallele Glieder: je Tag wird das nächstfällige Glied verwendet (Front-Kette).
+
+    - Richtung fallend: Preis 0,3 geht als 0,7 ein.
+
+    - Lücke zwischen Gliedern: keine Werte an Lückentagen, kein Vorwärtsauffüllen.
+
+    - Validierung: Vorschlag mit unbekannter Referenz oder Regel außerhalb des Katalogs →
+    verworfen bzw. als Hinweis geführt, Warnung geloggt.
+
+    - Übernahme: strukturierte Speicherung, Status draft, Prüfungen laufen.
+
+    - Regression: bestehende Korb-Metrik liefert dieselben Werte wie vorher.
+
+    - Agent mit Fake (keine echten LLM-Aufrufe), Quellabrufe gemockt.'
 - id: disc-1015-2227-regression-index-und-bestandteil
   name: 'Regression: Index und Bestandteile als Regressoren fehlt'
   thema: 'great. Now we lost the capability to regress the information (index and its constitents

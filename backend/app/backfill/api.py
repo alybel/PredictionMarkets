@@ -10,7 +10,6 @@ import logging
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from backend.app.backfill.service import BACKFILL_DAYS, DEFAULT_LIMIT, MAX_LIMIT, backfill_index, history_status
-from backend.app.backfill.sources import fetch_history
 from backend.app.deps import get_session
 from backend.app.engine import build_rule, get_rule
 from backend.app.history import MAX_DAYS
@@ -21,8 +20,8 @@ router = APIRouter(tags=["backfill"])
 
 
 def get_history_fetcher():
-    """Price-history source as a dependency so tests never reach the network."""
-    return fetch_history
+    """Price-history source as a dependency (None: the raw data layer) so tests never reach the network."""
+    return None
 
 
 @router.get("/history/status")

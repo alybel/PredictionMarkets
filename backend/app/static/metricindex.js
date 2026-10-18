@@ -1,6 +1,7 @@
 // Index builder from validated metrics: selection (GET /builder/metrics, validated only), create (POST) and
 // edit (PUT /builder/indices/{name}), standardized series with warning banner (GET /builder/indices/{name}).
-// Uses $, state, setStatus, loadIndices, selectIndex (indices.js), logEvent (shell.js), metricChart (metrics.js).
+// Uses $, state, setStatus, loadIndices, selectIndex (indices.js), logEvent (shell.js), metricChart (metrics.js),
+// showForecast (forecast.js, forecast power report below the index).
 // Every click, save and warning goes to app.log via logEvent.
 
 const MI_JSON = { "Content-Type": "application/json" };
@@ -33,9 +34,13 @@ async function miOpenForm(editing) {
   const box = $("mi-choices");
   box.textContent = "Validierte Metriken werden geladen …";
   try {
-    const { metrics, liquidity_median: median } = await miFetch("/builder/metrics");
+    const { metrics, liquidity_median: median, bookmarked_pending: pending = [], weighting_methods: methods } = await miFetch("/builder/metrics");
+    $("mi-pending").textContent = pending.length ? "Vorgemerkt, aber noch nicht freigegeben (erst nach Freigabe im Tab „Metriken“ wählbar): " +
+      pending.map((p) => p.name + " (" + p.status + ")").join(", ") : "";
+    $("mi-pending").classList.toggle("hidden", !pending.length);
     showLiquidityMedian("mi-liqmedian", "mi-minliq", median, miApplyMinLiquidity);
-    logEvent("info", "builder.metrics.loaded", { validated: metrics.map((m) => m.key), editing: editing ? editing.name : null });
+    logEvent("info", "builder.metrics.loaded", { validated: metrics.map((m) => m.key), editing: editing ? editing.name : null,
+      bookmarked: metrics.filter((m) => m.bookmarked).map((m) => m.key), pending: pending.map((p) => p.key) });
     box.replaceChildren();
     if (!metrics.length) box.textContent = "Keine validierte Metrik vorhanden – bitte zuerst im Tab „Metriken“ freigeben.";
     for (const m of metrics) {
@@ -44,11 +49,12 @@ async function miOpenForm(editing) {
       pick.dataset.key = m.key;
       const weight = Object.assign(document.createElement("input"), { type: "number", min: "0.01", step: "0.1", value: weights[m.key] ?? 1, title: "Gewicht" });
       label.dataset.liquidity = m.liquidity_usd ?? "";
-      label.append(pick, document.createTextNode(m.name + " (" + (MI_UNITS[m.unit] || m.unit) + ", " + m.days + " Tage, Liquidität Ø 30 T: " +
+      label.append(pick, document.createTextNode((m.bookmarked ? "★ vorgemerkt · " : "") + m.name + " (" + (MI_UNITS[m.unit] || m.unit) + ", " + m.days + " Tage, Liquidität Ø 30 T: " +
         metricUsd(m.liquidity_usd) + ") · Gewicht "), weight);
       box.appendChild(label);
     }
     miFilterChoices();
+    miwInit(editing, metrics, methods);
     const dropped = Object.keys(weights).filter((k) => !metrics.some((m) => m.key === k));
     if (dropped.length) miError("Nicht mehr validiert und daher nicht wählbar: " + dropped.join(", ") + " – bitte ersetzen oder entfernen.");
   } catch (err) {
@@ -91,17 +97,17 @@ async function miSave() {
   const components = [...document.querySelectorAll("#mi-choices label")]
     .filter((l) => l.querySelector("input[type=checkbox]").checked)
     .map((l) => ({ key: l.querySelector("input[type=checkbox]").dataset.key, weight: Number(l.querySelector("input[type=number]").value) }));
-  const editing = mi.editing;
-  logEvent("info", "button.click", { id: "create-index", name, components, mode: editing ? "update" : "create" });
+  const editing = mi.editing, weighting = miwPayload();
+  logEvent("info", "button.click", { id: "create-index", name, components, ...weighting, mode: editing ? "update" : "create" });
   try {
-    if (editing) await miFetch("/builder/indices/" + encodeURIComponent(editing.name), { method: "PUT", headers: MI_JSON, body: JSON.stringify({ components }) });
-    else await miFetch("/builder/indices", { method: "POST", headers: MI_JSON, body: JSON.stringify({ name, components }) });
+    if (editing) await miFetch("/builder/indices/" + encodeURIComponent(editing.name), { method: "PUT", headers: MI_JSON, body: JSON.stringify({ components, ...weighting }) });
+    else await miFetch("/builder/indices", { method: "POST", headers: MI_JSON, body: JSON.stringify({ name, components, ...weighting }) });
   } catch (err) {
     miError(err.message);
     logEvent("warning", "builder.index.save.refused", { name, message: err.message });
     return;
   }
-  logEvent("info", "builder.index.saved", { name, components });
+  logEvent("info", "builder.index.saved", { name, components, ...weighting });
   $("new-index-form").classList.add("hidden");
   await loadIndices();
   selectIndex(name);
@@ -122,6 +128,7 @@ async function loadMetricIndex(name, btn) {
     miRender(data);
     logEvent("info", "builder.index.loaded", { name, days: mi.days, points: data.points.length, first: data.points[0]?.date || null });
     showMetricCorrelation(name);
+    showForecast(name);
     setStatus("", false);
     if (data.warning) logEvent("warning", "builder.index.warning", { name, warnings: data.warnings });
   } catch (err) {
@@ -144,6 +151,7 @@ function miRender(data) {
   $("mi-caption").textContent = data.points.length
     ? "Tage, an denen jede Metrik einen z-Wert hat (je Metrik ab dem " + data.min_history + ". Wert)."
     : "Noch kein Indexwert: jede Metrik braucht mindestens " + data.min_history + " Tageswerte an gemeinsamen Tagen.";
+  $("mi-caption").textContent += " Gewichtung: " + (data.weighting_label || "Manuell") + " (je Tag nur aus Daten bis zu diesem Tag).";
   const last = data.points.length ? data.points[data.points.length - 1].components : {};
   const tbody = $("mi-components");
   tbody.replaceChildren();
@@ -152,7 +160,8 @@ function miRender(data) {
     const status = Object.assign(document.createElement("span"), {
       className: "badge " + (c.status === "validated" ? "ok" : c.status === "blocked" ? "bad" : ""), textContent: c.status,
       title: c.status_reason || "" });
-    const cells = [c.name, MI_UNITS[c.unit] || c.unit || "–", String(c.weight), status, miRaw(c.last_value, c.unit), miZ(last[c.key])];
+    const weight = c.weight_pct == null ? String(c.weight) : c.weight_pct.toFixed(1).replace(".", ",") + " %";
+    const cells = [c.name, MI_UNITS[c.unit] || c.unit || "–", weight, status, miRaw(c.last_value, c.unit), miZ(last[c.key])];
     cells.forEach((v, i) => {
       const td = document.createElement("td");
       if (v instanceof Node) td.appendChild(v); else td.textContent = v;

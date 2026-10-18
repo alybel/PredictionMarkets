@@ -3,7 +3,12 @@
 Run once a day, e.g. via cron: ``python -m backend.app.eui.daily``.
 Options: ``--date YYYY-MM-DD`` (recompute a stored day without fetching),
 ``--no-classify``, ``--limit N`` (cap new model classifications per run),
-``--no-stocks`` (skip loading the closes of the top-100 US stocks for the correlation analysis).
+``--no-stocks`` (skip loading the closes of the top-100 US stocks for the correlation analysis),
+``--no-domains`` (skip the domain load run that gives new markets of every domain their full history),
+``--no-directory`` (skip the market directory run that records every market and marks new ones for the inbox, and the
+risk-topic classification of these new markets),
+``--no-forecast`` (skip loading the closes of S&P 500, 10-year yield, TLT and VIX and rebuilding the forecast report of
+every metric index, risk index 6/7).
 """
 
 import argparse
@@ -13,11 +18,16 @@ from datetime import date
 from sqlalchemy.orm import Session
 
 from backend.app.db import make_engine, make_session_factory
+from backend.app.directory.service import refresh_directory
+from backend.app.risk.classify import classifier_from_env as risk_classifier_from_env
+from backend.app.risk.service import classify_new_markets
+from backend.app.domains.service import refresh_domains
 from backend.app.eui.classify import classifier_from_env, classify_missing
 from backend.app.eui.compute import compute_index
 from backend.app.eui.plausibility import seed_events
 from backend.app.eui.reference import seed_reference_indicators
 from backend.app.eui.snapshot import snapshot_rows, take_snapshot
+from backend.app.forecast.report import daily_forecast
 from backend.app.logging_setup import configure_logging
 from backend.app.stocks.prices import refresh_prices
 
@@ -50,16 +60,42 @@ def main() -> None:
     parser.add_argument("--no-classify", action="store_true")
     parser.add_argument("--limit", type=int, default=None)
     parser.add_argument("--no-stocks", action="store_true")
+    parser.add_argument("--no-domains", action="store_true")
+    parser.add_argument("--no-directory", action="store_true")
+    parser.add_argument("--no-forecast", action="store_true")
     args = parser.parse_args()
     configure_logging()
     with make_session_factory(make_engine())() as session:
         summary = run_daily(session, day=args.date, classify=not args.no_classify, limit=args.limit, fetch=args.date is None)
         if not args.no_stocks and args.date is None:
             try:  # stock prices are an add-on: never fail the index run (e.g. migration 0008 not applied yet)
-                summary["stocks"] = refresh_prices(session)
+                summary["stocks"] = refresh_prices(session, trigger="daily")
             except Exception:
                 session.rollback()
                 logger.exception("stock price refresh failed")
+        if not args.no_domains and args.date is None:
+            try:  # domains are an add-on as well (e.g. migration 0014 not applied yet)
+                summary["domains"] = refresh_domains(session)
+            except Exception:
+                session.rollback()
+                logger.exception("domain refresh failed")
+        if not args.no_directory and args.date is None:
+            try:  # the directory is an add-on as well (e.g. migration 0017 not applied yet)
+                summary["directory"] = refresh_directory(session)
+            except Exception:
+                session.rollback()
+                logger.exception("market directory refresh failed")
+            try:  # new inbox markets are classified for every risk topic (migration 0018)
+                summary["risk"] = classify_new_markets(session, risk_classifier_from_env())
+            except Exception:
+                session.rollback()
+                logger.exception("risk classification of new markets failed")
+        if not args.no_forecast and args.date is None:
+            try:  # forecast reports are an add-on as well (migration 0020)
+                summary["forecast"] = daily_forecast(session)
+            except Exception:
+                session.rollback()
+                logger.exception("forecast report refresh failed")
     print(summary)
 
 
